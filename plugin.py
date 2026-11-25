@@ -6,6 +6,7 @@
 #                       Corrected (C) 2017 epierre
 #                       Modified (C) 2017 Asdepique777
 #                       Modified (C) 2018-2021 Barberousse
+#                       Modified (C) 2026- vzwingma
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -22,7 +23,7 @@
 # <http://www.gnu.org/licenses/>.
 #
 """
-<plugin key="linky" name="Linky" author="Barberousse" version="2.6.1" externallink="https://github.com/guillaumezin/DomoticzLinky">
+<plugin key="linky" name="Linky" author="vzwingma" version="2.6.1" externallink="https://github.com/vzwingma/DomoticzLinky">
     <params>
         <param field="Mode4" label="Heures creuses (vide pour désactiver, cf. readme pour la syntaxe)" width="500px" required="false" default="">
 <!--        <param field="Mode4" label="Heures creuses" width="500px">
