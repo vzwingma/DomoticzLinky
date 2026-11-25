@@ -41,14 +41,14 @@
 | `externallink` | `https://github.com/guillaumezin/DomoticzLinky` (dépôt d'origine) | bloc XML `<plugin>` |
 | Dépôt d'origine (upstream) | `guillaumezin/DomoticzLinky` | readme, section Auteurs |
 | Fork analysé | `vzwingma/DomoticzLinky` (remote `origin` du clone) | `.git/config` du clone |
-| Commit analysé | `1ef6adf` = `HEAD` = `origin/master` du fork au 2026-11-25 | `.git/refs` du clone |
-| Tags | le clone local ne contient aucun tag au-delà de `2.3.8` ; la version `2.6.1` n'est donc identifiable que par son SHA | `.git/packed-refs` du clone |
+| Code analysé | commit `1ef6adf` (v2.6.1), identique à l'upstream `guillaumezin/DomoticzLinky` (`master`). `plugin.py` est **inchangé** dans le tag `v2.6.1` du fork (commit documentaire `f3df258`) | `git diff 1ef6adf f3df258 -- plugin.py` (vide) |
+| Tag | `v2.6.1` (fork `vzwingma/DomoticzLinky`, sur le commit documentaire `f3df258`) ; le code de référence reste identifié par le SHA `1ef6adf` | tags du fork |
 
 ### Statut de maintenance
 
 **Fork maintenu par vzwingma ; upstream `guillaumezin/DomoticzLinky` non maintenu (l'auteur n'utilise plus Domoticz).**
 
-> ⚠️ **Écart fork ↔ upstream non vérifié :** cette rétrodoc décrit le code du **fork** à `1ef6adf`. Le projet `domotique` construit actuellement son image à partir de la branche `master` de l'**upstream** (voir [§ 15](#15-intégration-dans-le-projet-domotique)). Les différences éventuelles entre les deux dépôts n'ont pas été comparées dans le cadre de ce plan.
+> ⚠️ **Upstream non épinglé :** cette rétrodoc décrit le code du **fork** à `1ef6adf`, identique à l'upstream `master` au moment de la rédaction (constat transmis par le pilote du plan, non recomparé par l'auteur de la rétrodoc). Le projet `domotique` construit son image à partir de la branche `master` de l'**upstream**, **non épinglée** (voir [§ 15](#15-intégration-dans-le-projet-domotique)) : toute évolution future de l'upstream rendrait cette identité caduque.
 
 Fichiers du dépôt : `plugin.py` (monolithe, ≈ 2 727 lignes), `readme.md` (guide utilisateur FR + EN), `LICENSE`, `assets/` (captures d'écran du guide), `.github/` (`FUNDING.yml`, `ISSUE_TEMPLATE.md` — **aucun workflow CI dans le fork**).
 
@@ -58,7 +58,7 @@ Fichiers du dépôt : `plugin.py` (monolithe, ≈ 2 727 lignes), `readme.md` (gu
 
 ### 2.1 Framework de plugins Python de Domoticz
 
-Le plugin s'exécute dans le **framework de plugins Python** de Domoticz (module `Domoticz` injecté, dictionnaires globaux `Parameters` et `Devices`). Domoticz appelle des **callbacks de module** (`onStart`, `onStop`, `onConnect`, `onMessage`, `onHeartbeat`, `onDisconnect`, …) qui délèguent tous à une instance unique `_plugin = BasePlugin()` (fonctions de module en fin de fichier, l. 2360-2414). Les connexions réseau sont **asynchrones** (`Domoticz.Connection(...).Connect()` puis `onConnect` → `Send()` → `onMessage`) : toute la logique est donc écrite comme une **machine à états** ([§ 5](#5-machine-à-états-de-connexion)).
+Le plugin s'exécute dans le **framework de plugins Python** de Domoticz (module `Domoticz` injecté, dictionnaires globaux `Parameters` et `Devices`). Domoticz appelle des **callbacks de module** (`onStart`, `onStop`, `onConnect`, `onMessage`, `onHeartbeat`, `onDisconnect`, …) qui délèguent à une instance unique `_plugin = BasePlugin()` (fonctions de module en fin de fichier, l. 2360-2414), **à l'exception de `onDeviceAdded`, `onDeviceModified` et `onDeviceRemoved`**, qui sont des callbacks **vides** (simple `global _plugin`, aucune délégation). Les connexions réseau sont **asynchrones** (`Domoticz.Connection(...).Connect()` puis `onConnect` → `Send()` → `onMessage`) : toute la logique est donc écrite comme une **machine à états** ([§ 5](#5-machine-à-états-de-connexion)).
 
 ### 2.2 Enedis Data Connect et proxy d'authentification
 
@@ -220,13 +220,14 @@ sending --> parseaccesstoken : onMessage() : retour à l'étape émettrice\n(sCo
 | `parsedevicecode` | autre réponse | message d'erreur ; `setNextConnectionForLater(iInterval)` | `retry` | `parseDeviceCode()` |
 | `parseaccesstoken` | résultat `done` (4 champs reçus) | jetons enregistrés | `start` | `parseAccessToken()` |
 | `parseaccesstoken` | `authorization_pending` | `iInterval` ← `interval` reçu (défaut 5) ; `setNextConnectionForLater(iInterval)` | `askagainaccesscode` | `parseAccessToken()` |
-| `parseaccesstoken` | résultat `retry` | `setNextConnectionForLater(iInterval)` | `retry` | `parseAccessToken()` |
+| `parseaccesstoken` | résultat `retry` (200 incomplet « Pas assez de données reçue » / « Pas de données reçue », ou autre statut) | `setNextConnectionForLater(iInterval)` | `retry` | `parseAccessToken()` |
+| `parseaccesstoken` | `authorization_pending` **avec corps non JSON** (`ValueError`) — ou réponse 200 non JSON | message « Les données reçues ne sont pas du JSON » ; retour `retry` (et non `pending`) ; `setNextConnectionForLater(iInterval)` | `retry` | `parseAccessToken()` |
 | `parseaccesstoken` | `unauthorized` / `invalid_grant` / `invalid_request` | `disablePlugin()` | arrêt (`isStarted = False`) | `parseAccessToken()` |
 | `askagainaccesscode` | `httpLoginConn.Connected()` vrai | `getAccessToken()` | `parseaccesstoken` | `handleConnection()` |
 | `askagainaccesscode` | connexion fermée | message « Redemande du jeton d'accès » ; `bHasAFail` | `done` | `handleConnection()` |
 | `start` | ≥ 1 PRM (`usage_points_id` ou `lFalseCustomer`) | `resetDates(aujourd'hui 00:00)`, `resetDayAccumulate()` | `nextcons` | `handleConnection()` |
 | `start` | 0 PRM | erreur « Erreur à la lecture des points de livraison » ; `bHasAFail` | `done` | `handleConnection()` |
-| `nextcons` | — | `sUsagePointId` ← PRM courant (majuscules) ; `bProdMode = False` ; `bNoConsumption/bNoProduction = False` | `next` | `handleConnection()` |
+| `nextcons` | — | `sUsagePointId` ← PRM courant (majuscules) ; si `bHasAFail` : `bGlobalHasAFail = True` puis `bHasAFail = False` (propagation de l'échec du PRM précédent) ; `bProdMode = False` ; `bNoConsumption/bNoProduction = False` | `next` | `handleConnection()` |
 | `next` | — | `resetDates()` ; `getDataHours()` (cache ou requête) | `getdatahours` | `handleConnection()` |
 | `getdatahours` | `invalid_token` et `bRefreshToken` faux | `refreshToken()` | `parseaccesstoken` | `handleConnection()` |
 | `getdatahours` | statut 403 | `disablePlugin()` | arrêt | `handleConnection()` |
