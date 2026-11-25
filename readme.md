@@ -1,10 +1,19 @@
 # Fork vzwingma / notes techniques
 
 - **Statut de maintenance** : fork maintenu par vzwingma ; upstream `guillaumezin/DomoticzLinky` non maintenu (l'auteur n'utilise plus Domoticz).
-- **Usage** : ce plugin est destiné à être embarqué dans l'image Docker Domoticz du projet [vzwingma/domotique](https://github.com/vzwingma/domotique). À ce jour, la CI de ce projet récupère encore l'upstream (branche `master`, non épinglée) et non ce fork ; voir [docs/ARCHITECTURE.md](https://github.com/vzwingma/domotique/blob/master/docs/ARCHITECTURE.md) (§ 5.4).
-- **Notes techniques** : rétroconception du code (v2.6.1, commit `1ef6adf`) — paramètres, machine à états, authentification, devices, persistance, dette technique : [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md).
+- **Usage** : ce plugin est destiné à être embarqué dans l'image Docker Domoticz du projet [vzwingma/domotique](https://github.com/vzwingma/domotique). La CI de ce projet récupère **ce fork**, épinglé par SHA de commit et tag (mises à jour par PR Renovate, sans automerge) ; voir [docs/ARCHITECTURE.md](https://github.com/vzwingma/domotique/blob/master/docs/ARCHITECTURE.md) (§ 5.4) et l'[ADR 007](https://github.com/vzwingma/domotique/blob/master/docs/adr/007-plugins-domoticz-provenance-epinglee.md).
+- **Notes techniques** : rétroconception du code (analyse initiale v2.6.1, commit `1ef6adf`, annotée v2.7.0) — paramètres, machine à états, authentification, devices, persistance, sécurité, dette technique : [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md).
+- **Historique** : [CHANGELOG.md](CHANGELOG.md) (version courante : **2.7.0**).
+- **Tests et CI** : le dossier `tests/` contient une suite `pytest` (faux module `Domoticz`, aucun Domoticz requis) ; `ruff.toml` configure un lint minimal (erreurs de syntaxe et noms non définis). La CI GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) exécute `py_compile`, `ruff` et `pytest` sur Python 3.11 et 3.13 (la production utilise Python 3.13.5). En local :
 
-*EN: this is vzwingma's maintained fork; the upstream `guillaumezin/DomoticzLinky` is no longer maintained (its author no longer uses Domoticz). Technical reverse-engineering notes (in French) are in [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md). The user guide below is unchanged.*
+```
+python -m pip install -r requirements-dev.txt
+python -m py_compile plugin.py
+python -m ruff check plugin.py tests
+python -m pytest -q
+```
+
+*EN: this is vzwingma's maintained fork; the upstream `guillaumezin/DomoticzLinky` is no longer maintained (its author no longer uses Domoticz). Technical reverse-engineering notes (in French) are in [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md), the release history is in [CHANGELOG.md](CHANGELOG.md), and a French section "Paramètres du plugin" describes the `Mode1`-`Mode6` settings (including a warning about the advanced debug modes). The rest of the user guide below is unchanged.*
 
 # Participer aux frais d'hébergement et au développement du plugin
 Le proxy permettant de gérer l'authentification auprès d'Enedis pour que le plugin Linky puisse récupérer les consommations / productions d'électricité, est hébergé sur un serveur dédié. Si vous le souhaitez, vous pouvez participer aux frais d'hébergement en cliquant sur le bouton ci-dessous.
@@ -181,6 +190,36 @@ Vous pouvez choisir le nombre à afficher sur le tableau de bord :
 ![Log history setting](assets/loghistoryfr.jpg)
 
 * Vous pouvez choisir le nombre de jours à récupérer pour les autres vues. Si la valeur est supérieur à 35, le plugin ne fera la récupération que de temps en temps ou quand le paramètre est modifié, pour ne pas surcharger les serveurs d'Enedis. Une fois les données récupérées, elles sont stockées et persistent dans la base de données de Domoticz
+
+## Paramètres du plugin
+Cette section résume les paramètres affichés dans Configuration / Matériel pour le plugin Linky (les noms techniques `Mode1` à `Mode6` et `Port` sont ceux que Domoticz utilise en interne et que reprend la [documentation technique](docs/RETROCONCEPTION.md#3-paramètres-du-plugin)). Les valeurs hors bornes sont ramenées aux bornes au démarrage du plugin.
+
+| Paramètre | Libellé affiché dans Domoticz | Rôle | Valeurs | Défaut |
+|---|---|---|---|---|
+| `Mode1` | « Nombre de jours à récupérer pour la vue par heures (0 min, pour désactiver la récupération par heures, 7 max) » | Profondeur de l'historique de la vue par heures (voir [Nombre de jours à récupérer](#nombre-de-jours-à-récupérer)) | entier de 0 à 7 ; `0` désactive la vue par heures ; valeur invalide : 7 | 7 |
+| `Mode2` | « Nombre de jours à récupérer pour les autres vues (730 max) » | Profondeur de l'historique des vues jour / semaine / mois / année | entier de 2 à 730 ; relevé automatiquement selon l'affichage secondaire (`Mode6`) : semaine en cours 7, semaine dernière 14, mois en cours 32, mois dernier 63, année en cours 366 ; au-delà de 35 jours, la récupération complète n'a lieu que de temps en temps | 7 |
+| `Mode3` | « Debug » | Debug et maintenance (voir le tableau ci-dessous) | Non, Simple, Avancé, Reset consentement, Reset cache, Faux client 0 à 9 | Non |
+| `Mode4` | « Heures creuses (vide pour désactiver, cf. readme pour la syntaxe) » | Plages d'heures creuses (voir [Heures creuses](#heures-creuses)) | texte, syntaxe décrite dans [Heures creuses](#heures-creuses) ; vide = désactivé | vide |
+| `Mode5` | « Consommation à montrer sur le tableau de bord (affichage principal) » | Pic de consommation affiché sur la première ligne du dispositif (voir [Affichage](#affichage)) | pic de consommation de la journée dernière, de la semaine en cours / dernière, du mois en cours / dernier, de l'année en cours | aucune valeur par défaut dans la liste ; sans choix, le plugin utilise « Pic consommation journée dernière » |
+| `Mode6` | « Consommation à montrer sur le tableau de bord (affichage secondaire) » | Énergie affichée sur les lignes suivantes du dispositif | consommation / production, ou horaire maximale, ou horaire moyenne, de la journée dernière, de la semaine en cours / dernière, du mois en cours | « Consommation / production journée dernière » |
+| `Port` | « Ordre des index (Utilisation 1 / Utilisation 2) » | Ordre heures pleines / heures creuses (voir [Ordre des index](#ordre-des-index)) ; le champ `Port` est réutilisé, ce n'est pas un port réseau | « Heures pleines puis heures creuses » ou « Heures creuses puis heures pleines » | Heures pleines puis heures creuses |
+
+### Effets du paramètre « Debug » (`Mode3`)
+
+| Choix affiché | Valeur | Effet |
+|---|---|---|
+| Non | 0 | Aucun debug. |
+| Simple | 1 | Crée un fichier de debug dans `/tmp` (voir ci-dessous) ; les messages de debug ne vont que dans ce fichier, pas dans le log Domoticz. |
+| Avancé | 2 | Fichier de debug **et** messages de debug recopiés dans le log Domoticz, **avec le debug complet du framework Domoticz** (voir l'avertissement ci-dessous). |
+| Reset consentement | 3 | À **chaque démarrage** tant que ce choix est sélectionné, le plugin efface ses jetons : un nouveau consentement est demandé (voir [Obtention du consentement](#obtention-du-consentement)). Active aussi le debug avancé. |
+| Reset cache | 4 | À **chaque démarrage** tant que ce choix est sélectionné, le plugin vide son cache : les données sont redemandées à Enedis à la prochaine collecte (utile pour appliquer les heures creuses aux anciennes données). Active aussi le debug avancé. |
+| Faux client 0 à 9 | 10 à 19 | Mode de test : le plugin utilise le serveur de test (sandbox) avec des **faux points de livraison**, sans consentement ; les données affichées sont fictives, ne l'utilisez pas sur une installation réelle. Active aussi le debug avancé. « Faux client 9 » ne définit aucun faux point de livraison et n'est pas utilisable. |
+
+Après un « Reset consentement » ou un « Reset cache », remettez « Debug » sur sa valeur précédente (en général « Non ») et cliquez sur « Modifier », sinon l'opération se répète à chaque redémarrage de Domoticz.
+
+> ⚠️ **Debug = fichiers `/tmp`** : dès « Simple », le plugin écrit un fichier `/tmp/DomoticzLinky_<date>_<aléa>.log` (dans le conteneur si Domoticz tourne sous Docker). Son chemin est indiqué dans le log Domoticz au démarrage. Il est fermé à l'arrêt du plugin mais **n'est jamais supprimé automatiquement** : supprimez-le vous-même quand vous n'en avez plus besoin. Depuis la version 2.7.0, les jetons, les en-têtes `Authorization` et les cookies y sont masqués (`***`) ; en revanche, votre numéro de point de livraison (PRM) et le code de consentement y apparaissent en clair : relisez le fichier avant de le transmettre à quelqu'un.
+
+> ⚠️ **Avertissement — debug avancé (connu, non corrigé)** : tous les choix de « Debug » **à partir d'« Avancé »** (Avancé, Reset consentement, Reset cache, Faux clients) activent le **debug complet du framework Domoticz**. Ce debug n'est pas filtré par le plugin et peut écrire **les jetons en clair dans le log Domoticz** (en-tête `Bearer`, `refresh_token`, réponse d'obtention des jetons). N'activez ces choix que **ponctuellement**, puis remettez « Debug » sur « Non » et **purgez le log Domoticz** (Configuration / Log, ou le fichier de log de Domoticz). Le choix « Simple » n'est pas concerné. Détail technique : [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md#3-paramètres-du-plugin) (§ 3, effets de `Mode3`) et § 13 (sécurité, risque S9 / D17).
 
 ## Dépannage
 ### Etat des services
