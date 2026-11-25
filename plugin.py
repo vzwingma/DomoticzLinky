@@ -163,11 +163,11 @@ NB_WEEKS_LONG_HISTORY = 5
 NO_STATUS_ERROR_CODE = 999
 
 # Masquage des secrets dans les journaux (v2.7.0)
-SENSITIVE_KEYS = frozenset(("authorization", "access_token", "refresh_token", "device_code", "id_token", "cookie", "set-cookie"))
+SENSITIVE_KEYS = frozenset(("authorization", "access_token", "refresh_token", "device_code", "client_secret", "id_token", "cookie", "set-cookie"))
 MASK = "***"
 _SECRET_PATTERNS = (
-    (re.compile(r"(?i)\b(access_token|refresh_token|device_code|id_token)=[^&\s'\"]*"), r"\1=" + MASK),
-    (re.compile(r"(?i)(\"(?:access_token|refresh_token|device_code|id_token)\"\s*:\s*\")[^\"]*\""), r"\1" + MASK + "\""),
+    (re.compile(r"(?i)\b(access_token|refresh_token|device_code|client_secret|id_token)=[^&\s'\"]*"), r"\1=" + MASK),
+    (re.compile(r"(?i)(\"(?:access_token|refresh_token|device_code|client_secret|id_token)\"\s*:\s*\")[^\"]*\""), r"\1" + MASK + "\""),
     (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9\-._~+/=]+"), r"\1 " + MASK),
 )
 

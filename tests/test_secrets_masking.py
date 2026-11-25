@@ -62,6 +62,19 @@ class TestFuitesDansLesReponses:
         plugin.dumpDictToLog({"a": {"b": {"access_token": sentinels.ACCESS, "Refresh_Token": sentinels.REFRESH}}})
         assert_no_leak(captured(plugin), sentinels.ACCESS, sentinels.REFRESH)
 
+    def test_dump_reponse_client_secret_json_en_octets(self, plugin, captured, sentinels):
+        # T3.6 : corps JSON (octets) contenant client_secret, masqué par motif
+        corps = ('{"client_secret":"%s","token_type":"Bearer"}' % sentinels.CLIENT_SECRET).encode()
+        plugin.dumpDictToLog({"Status": 200, "Data": corps})
+        assert_no_leak(captured(plugin), sentinels.CLIENT_SECRET)
+
+    def test_dump_client_secret_imbrique(self, plugin, captured, sentinels):
+        # T3.6 : masquage par NOM de clé (valeur brute, sans motif reconnaissable), à 3 profondeurs
+        plugin.dumpDictToLog({"client_secret": sentinels.CLIENT_SECRET,
+                              "a": {"Client_Secret": sentinels.CLIENT_SECRET + "-2",
+                                    "b": {"client_secret": sentinels.CLIENT_SECRET + "-3"}}})
+        assert_no_leak(captured(plugin), sentinels.CLIENT_SECRET)
+
     def test_dump_valeur_non_dict(self, plugin, captured, sentinels):
         plugin.dumpDictToLog("refresh_token=%s&x=1" % sentinels.REFRESH)
         assert_no_leak(captured(plugin), sentinels.REFRESH)
@@ -87,6 +100,25 @@ class TestFiltreDesMessages:
         sSecret = "TOK-FREE-SENTINEL"
         getattr(plugin, sMethode)(sGabarit.format(s=sSecret))
         assert_no_leak(captured(plugin), sSecret)
+
+    @pytest.mark.parametrize("sMethode", ["myLog", "myStatus", "myError", "myDebug"])
+    @pytest.mark.parametrize("sGabarit", [
+        "requête grant_type=x&client_id=ID&client_secret={s}&usage=1",
+        "requête client_secret={s}",
+        "requête CLIENT_SECRET={s}&x=1",
+        "réponse {{\"client_secret\":\"{s}\",\"x\":1}}",
+        "réponse {{\"client_secret\" : \"{s}\"}}",
+    ], ids=["form_milieu", "form_seul", "form_casse", "json", "json_espaces"])
+    def test_client_secret_message_libre_masque(self, plugin, captured, sentinels, sMethode, sGabarit):
+        # T3.6 : client_secret en texte form-urlencoded ou JSON via le chemin de log (my*)
+        getattr(plugin, sMethode)(sGabarit.format(s=sentinels.CLIENT_SECRET))
+        assert_no_leak(captured(plugin), sentinels.CLIENT_SECRET)
+
+    def test_client_secret_form_conserve_les_autres_parametres(self, plugin, domoticz, sentinels):
+        # Non-régression : seul la valeur du secret est masquée, le reste de la requête reste lisible
+        plugin.myLog("requête client_id=ID-PUBLIC&client_secret=%s&usage=1" % sentinels.CLIENT_SECRET)
+        message = "\n".join(domoticz.logs["Log"])
+        assert "client_id=ID-PUBLIC" in message and "usage=1" in message and "client_secret=" in message
 
     def test_setConfigItem_en_erreur_ne_log_pas_la_valeur(self, plugin, domoticz, captured, sentinels):
         domoticz.config_fail_on_set = True  # l'échec survient après le calcul du checksum
