@@ -1,7 +1,7 @@
-# Rétroconception technique du plugin Domoticz « Linky » (`plugin.py` v2.6.1)
+# Rétroconception technique du plugin Domoticz « Linky » (`plugin.py` v2.6.1, annotée v2.7.0)
 
-> **Périmètre :** rétrodocumentation du code existant, rédigée **sans aucune modification de code**.
-> **Source analysée :** `plugin.py` version **2.6.1**, dépôt `vzwingma/DomoticzLinky`, branche `master`, commit **`1ef6adf`** (`1ef6adfd0fe0e1f6c78575a9d6d0100523341bc5`).
+> **Périmètre :** rétrodocumentation du code existant, rédigée **sans aucune modification de code** (plan d'action 009), puis **annotée pour la v2.7.0** (plan d'action 010 : correctifs S2/S3, tests, CI, provenance épinglée). Les § 1, 3 (effets de `Mode3`), 9.4, 11, 12, 13, 14 et 15 portent l'état **v2.7.0** ; les autres sections décrivent le comportement analysé à `1ef6adf`, inchangé en v2.7.0 sauf mention contraire.
+> **Source analysée :** `plugin.py` version **2.6.1**, dépôt `vzwingma/DomoticzLinky`, branche `master`, commit **`1ef6adf`** (`1ef6adfd0fe0e1f6c78575a9d6d0100523341bc5`). **Version courante : 2.7.0** (branche `fix/v2.7.0`, voir [`CHANGELOG.md`](../CHANGELOG.md)).
 > **Convention de référence :** les affirmations renvoient à un **nom de fonction** (`fonction()` = méthode de `BasePlugin`, ou fonction de module) de `plugin.py` v2.6.1 @ `1ef6adf`. Les numéros de ligne (`l.`) sont **indicatifs** (complément seulement) et valent pour ce SHA.
 > **Langue :** français (décision du projet). Le guide utilisateur FR/EN reste dans [`readme.md`](../readme.md) et n'est pas dupliqué ici.
 > **Rédaction :** 2026-11-25 (plan d'action 009 du dépôt `vzwingma/domotique`).
@@ -34,23 +34,23 @@
 | Élément | Valeur | Source |
 |---|---|---|
 | Clé du plugin | `key="linky"`, nom `Linky` | bloc XML `<plugin>` en tête de `plugin.py` (l. 25) |
-| Version | `2.6.1` | bloc XML `<plugin>` ; envoyée aussi dans l'en-tête `User-Agent: DomoticzLinkyPlugin/<version>` (`initHeaders()`) |
-| Auteur déclaré | `Barberousse` (copyrights historiques : Baptiste Candellier 2016, Asdepique777 2017, epierre 2017, Barberousse 2018-2021) | en-tête de licence + attribut `author` |
+| Version | `2.7.0` (analyse initiale : `2.6.1` @ `1ef6adf`, historique conservé) | bloc XML `<plugin>` ; envoyée aussi dans l'en-tête `User-Agent: DomoticzLinkyPlugin/<version>` (`initHeaders()`) |
+| Auteur déclaré | `vzwingma` en v2.7.0 (`Barberousse` en v2.6.1) ; copyrights historiques conservés dans l'en-tête : Baptiste Candellier 2016, Asdepique777 2017, epierre 2017, Barberousse 2018-2021, vzwingma 2026- | en-tête de licence + attribut `author` |
 | Licence du plugin | **AGPL-3.0** (en-tête de `plugin.py` + fichier `LICENSE`) | en-tête du fichier |
 | Code tiers embarqué | classe `JoursFeries` issue de `etalab/jours-feries-france`, licence **MIT** (copyright Etalab 2020, texte de licence reproduit en commentaire) | classe `JoursFeries` (l. 2534 et suivantes) |
-| `externallink` | `https://github.com/guillaumezin/DomoticzLinky` (dépôt d'origine) | bloc XML `<plugin>` |
+| `externallink` | `https://github.com/vzwingma/DomoticzLinky` (fork) en v2.7.0 ; `https://github.com/guillaumezin/DomoticzLinky` (dépôt d'origine) en v2.6.1 @ `1ef6adf` | bloc XML `<plugin>` |
 | Dépôt d'origine (upstream) | `guillaumezin/DomoticzLinky` | readme, section Auteurs |
 | Fork analysé | `vzwingma/DomoticzLinky` (remote `origin` du clone) | `.git/config` du clone |
 | Code analysé | commit `1ef6adf` (v2.6.1), identique à l'upstream `guillaumezin/DomoticzLinky` (`master`). `plugin.py` est **inchangé** dans le tag `v2.6.1` du fork (commit documentaire `f3df258`) | `git diff 1ef6adf f3df258 -- plugin.py` (vide) |
-| Tag | `v2.6.1` (fork `vzwingma/DomoticzLinky`, sur le commit documentaire `f3df258`) ; le code de référence reste identifié par le SHA `1ef6adf` | tags du fork |
+| Tag | `v2.6.1` (fork `vzwingma/DomoticzLinky`, sur le commit documentaire `f3df258`) ; le code de référence reste identifié par le SHA `1ef6adf`. `v2.7.0` : tag posé sur le commit de merge de la branche `fix/v2.7.0` (publication par le mainteneur, plan 010 T4.2) | tags du fork |
 
 ### Statut de maintenance
 
 **Fork maintenu par vzwingma ; upstream `guillaumezin/DomoticzLinky` non maintenu (l'auteur n'utilise plus Domoticz).**
 
-> ⚠️ **Upstream non épinglé :** cette rétrodoc décrit le code du **fork** à `1ef6adf`, identique à l'upstream `master` au moment de la rédaction (constat transmis par le pilote du plan, non recomparé par l'auteur de la rétrodoc). Le projet `domotique` construit son image à partir de la branche `master` de l'**upstream**, **non épinglée** (voir [§ 15](#15-intégration-dans-le-projet-domotique)) : toute évolution future de l'upstream rendrait cette identité caduque.
+> ✅ **Provenance épinglée :** le projet `domotique` construit son image à partir de **ce fork** (`vzwingma/DomoticzLinky`), **épinglé par SHA de commit** avec le tag en commentaire (`ref: <sha> # <tag>` dans `build-domoticz.yml`) — pin initial `v2.6.1` (commit `f3df258`), montée vers `v2.7.0` après publication du tag. Les montées de version arrivent par PR Renovate **sans automerge** (relue et fusionnée à la main). Décision : [ADR 007 du dépôt `domotique`](https://github.com/vzwingma/domotique/blob/master/docs/adr/007-plugins-domoticz-provenance-epinglee.md) ; détail : [§ 15](#15-intégration-dans-le-projet-domotique). L'identité du code analysé (`1ef6adf`, identique à l'upstream `master` à la date de la rétrodoc, constat transmis par le pilote du plan) reste une référence **historique** : l'upstream n'est plus consommé.
 
-Fichiers du dépôt : `plugin.py` (monolithe, ≈ 2 727 lignes), `readme.md` (guide utilisateur FR + EN), `LICENSE`, `assets/` (captures d'écran du guide), `.github/` (`FUNDING.yml`, `ISSUE_TEMPLATE.md` — **aucun workflow CI dans le fork**).
+Fichiers du dépôt : `plugin.py` (monolithe, ≈ 2 776 lignes en v2.7.0 ; ≈ 2 727 à `1ef6adf`), `readme.md` (guide utilisateur FR + EN), `CHANGELOG.md`, `LICENSE`, `assets/` (captures d'écran du guide), `tests/` (suite pytest avec faux module `Domoticz`), `requirements-dev.txt` (`pytest`, `ruff`), `ruff.toml`, `.gitignore`, `.github/` (`FUNDING.yml`, `ISSUE_TEMPLATE.md`, `workflows/ci.yml` — CI GitHub Actions sur Python 3.11 et 3.13). Aucun `.py` à la racine autre que `plugin.py` (seul fichier embarqué dans l'image).
 
 ---
 
@@ -91,7 +91,7 @@ Déclarés dans le bloc XML `<params>` (l. 26-112) et lus dans `onStart()`.
 |---|---|
 | `0` | Aucun debug. |
 | `1` | Crée un fichier de log temporaire ([§ 11](#11-journalisation-et-debug)) ; `dumpDictToLog()` actif (fichier seulement). |
-| `2` | Idem + `Domoticz.Debugging(1)` + messages de debug recopiés dans le log Domoticz (`myMessage()`). |
+| `2` | Idem + `Domoticz.Debugging(1)` (⚠️ log du framework Domoticz **non masqué**, voir D17 / [§ 13](#13-sécurité) S9) + messages de debug recopiés dans le log Domoticz (`myMessage()`). |
 | `3` | `resetTokens()` à **chaque démarrage** tant que la valeur reste à 3 → nouveau consentement requis. Active aussi le debug avancé (niveau > 1). |
 | `4` | `resetCache()` à chaque démarrage (vide `cache` et `cache_checksum`). Active aussi le debug avancé. |
 | `10` à `18` | **Sandbox** : `iAlternateAddress = 1`, liste `lFalseCustomer` prédéfinie (1 à 3 faux PRM selon la valeur) ; l'étape `idle` saute l'authentification. Debug avancé actif. |
@@ -413,7 +413,7 @@ Le plugin stocke son état via `Domoticz.Configuration()` (la persistance est as
 
 ### 9.4 Fichier de debug
 
-Si `Mode3` ≥ 1 : fichier **`/tmp/DomoticzLinky_<AAAA_MM_JJ_HH_MM_SS>_<aléa>.log`** (répertoire temporaire du système, `tempfile.NamedTemporaryFile(prefix="DomoticzLinky"+…, suffix=".log", delete=False)`), jamais supprimé ni fermé par le plugin (voir [§ 11](#11-journalisation-et-debug)).
+Si `Mode3` ≥ 1 : fichier **`/tmp/DomoticzLinky_<AAAA_MM_JJ_HH_MM_SS>_<aléa>.log`** (répertoire temporaire du système, `tempfile.NamedTemporaryFile(mode='w+t', delete=False, prefix="DomoticzLinky"+…, suffix=".log")`). Depuis la v2.7.0, `onStop()` le **ferme** (`flush()`, `close()`, `fDebug = None`, D16) ; il n'est **jamais supprimé** par le plugin (`delete=False`, purge manuelle). Son contenu est **masqué** des secrets (voir [§ 11](#11-journalisation-et-debug)). Aucun `chmod` dans `plugin.py` : les droits sont ceux de la bibliothèque standard (`NamedTemporaryFile` crée le fichier avec les mêmes règles que `tempfile.mkstemp()`, soit lisible et inscriptible par l'utilisateur créateur seul, d'après la documentation Python ; non vérifié à l'exécution sur le NAS).
 
 > Sources : `getConfigItemAndChecksum()`, `getConfigItem()`, `setConfigItem()`, `resetTokens()`, `resetCache()`, `saveCache()`, `loadCache()`, `onStart()`.
 
@@ -448,10 +448,26 @@ Si `Mode3` ≥ 1 : fichier **`/tmp/DomoticzLinky_<AAAA_MM_JJ_HH_MM_SS>_<aléa>.l
 | `myDebug()` | `Domoticz.Log` **uniquement si `Mode3` > 1** | oui (préfixe `Debug :`) |
 
 - Le **lien de consentement** est volontairement émis via `myError()` pour apparaître dans l'onglet *Erreur* du log Domoticz (cf. readme).
-- `dumpDictToLog()` détaille récursivement (3 niveaux) les dictionnaires de requêtes, réponses et caches via `myDebug()` dès que `Mode3` ≥ 1 ; **voir D8 pour les informations sensibles qu'il écrit**.
-- `Mode3` ≥ 1 : fichier **`/tmp/DomoticzLinky_*.log`** ouvert dans `onStart()` (`delete=False`, jamais fermé ; `flush()` seulement dans `onStop()`, `disablePlugin()` et à l'échec de version). Le chemin est affiché au démarrage (« Log dans le fichier … »).
-- `Mode3` ≥ 2 : `Domoticz.Debugging(1)` (debug du framework) et messages de debug recopiés dans le log Domoticz.
+- `dumpDictToLog()` détaille récursivement (3 niveaux) les dictionnaires de requêtes, réponses et caches via `myDebug()` dès que `Mode3` ≥ 1 ; **voir D8 et [§ 13](#13-sécurité) pour les informations sensibles** : depuis la v2.7.0 elles sont masquées (voir ci-dessous).
+- `Mode3` ≥ 1 : fichier **`/tmp/DomoticzLinky_*.log`** ouvert dans `onStart()` (`delete=False`, jamais supprimé ; fermé par `onStop()` depuis la v2.7.0 — D16 ; `flush()` aussi dans `disablePlugin()` et à l'échec de version). Le chemin est affiché au démarrage (« Log dans le fichier … »).
+- `Mode3` ≥ 2 : `Domoticz.Debugging(1)` (debug **du framework Domoticz**, **non couvert par le masquage** — voir D17) et messages de debug recopiés dans le log Domoticz.
 - Messages d'étape : `showSimpleStepError()` et `showStepError()` préfixent « Durant l'étape … » (étape et, pour `showStepError()`, plage de dates).
+
+### Masquage des secrets (v2.7.0)
+
+Constantes de module (après `NO_STATUS_ERROR_CODE`) : `SENSITIVE_KEYS`, `MASK` (`***`), `_SECRET_PATTERNS`, et fonctions `maskSecrets()` / `maskValue()`.
+
+| Élément | Comportement |
+|---|---|
+| Clés sensibles (`SENSITIVE_KEYS`, comparaison insensible à la casse) | `authorization`, `access_token`, `refresh_token`, `device_code`, `client_secret`, `id_token`, `cookie`, `set-cookie` : la valeur est remplacée par `***` |
+| Motifs (`_SECRET_PATTERNS`, insensibles à la casse) | `clé=valeur` (corps encodé URL) et JSON `"clé":"valeur"` pour `access_token`, `refresh_token`, `device_code`, `client_secret`, `id_token` ; `Bearer <jeton>` / `Basic <jeton>` (en-tête `Authorization`) |
+| `dumpDictToLog()` | masque **par clé** à chacune des 3 profondeurs, et passe les valeurs non-dict par `maskSecrets()` |
+| `myMessage()`, `myLog()`, `myStatus()`, `myError()` | appliquent `maskSecrets()` au message avant écriture (log Domoticz **et** fichier de debug) ; `myDebug()` passe par `myMessage()`. Idempotent |
+| `setConfigItem()` en erreur | ne journalise plus `str(Value)` mais le **type** de la valeur et la clé |
+| **Laissés en clair (volontaire)** | `user_code` et URL de consentement (nécessaires à l'utilisateur), PRM, `Verb` / `URL` / `Host` |
+| **Hors périmètre** | log du **framework** Domoticz activé par `Domoticz.Debugging(1)` dès `Mode3` ≥ 2 (D17) : il ne passe pas par les fonctions `my*()` ; d'après la revue de code, il journalise en clair `Bearer`, `refresh_token` et la réponse de jetons (non reproduit à l'exécution) |
+
+> Sources : `maskSecrets()`, `maskValue()`, `dumpDictToLog()`, `myMessage()`, `myLog()`, `myStatus()`, `myError()`, `setConfigItem()`, `onStart()`. Couverture : `tests/test_secrets_masking.py` (valeurs sentinelles, non-régression du clair).
 
 ---
 
@@ -459,7 +475,7 @@ Si `Mode3` ≥ 1 : fichier **`/tmp/DomoticzLinky_<AAAA_MM_JJ_HH_MM_SS>_<aléa>.l
 
 | Élément | Détail |
 |---|---|
-| Langage | Python 3 (framework de plugins Domoticz) — pas de version minimale déclarée ; `hashlib.blake2s` est testé dynamiquement avec repli `sha512` |
+| Langage | Python 3 (framework de plugins Domoticz) — pas de version minimale déclarée dans le plugin ; **CI du fork : Python 3.11 (compatibilité minimale, `ruff` `target-version = "py311"`) et 3.13** ; **production (NAS) : Python 3.13.5** (confirmé par le mainteneur). `hashlib.blake2s` est testé dynamiquement avec repli `sha512` |
 | Bibliothèques | **Bibliothèque standard seulement** : `sys`, `json`, `copy`, `urllib.parse.quote`, `datetime`, `time.strptime`, `re`, `tempfile`, `pickle`, `codecs`, `hashlib` + module `Domoticz` du framework |
 | Domoticz minimum | **4.11070** : en dessous, `onStart()` journalise « Votre version de Domoticz est trop ancienne » et le plugin ne démarre pas |
 | Production + HP/HC | Nécessite Domoticz **≥ 4.11774** (type P1 Power) ; sinon repli **Managed Counter** avec un message informatif et **perte** de la distinction HP/HC (valeur = U1 + U2) |
@@ -472,42 +488,49 @@ Si `Mode3` ≥ 1 : fichier **`/tmp/DomoticzLinky_<AAAA_MM_JJ_HH_MM_SS>_<aléa>.l
 
 ## 13. Sécurité
 
-| # | Constat | Détail | Source |
-|---|---|---|---|
-| S1 | **Jetons et `Authorization` écrits en clair en debug** | `dumpDictToLog()` affiche chaque clé/valeur : en-tête `Authorization` des requêtes de données, `refresh_token` / `usage_points_id` / `device_code` dans le corps des requêtes d'authentification, et réponses brutes (donc `access_token` / `refresh_token`). Dès `Mode3` ≥ 1, ces contenus vont dans le **fichier `/tmp`** (non protégé, non supprimé) et, dès `Mode3` ≥ 2, dans le **log Domoticz**. | `getData()`, `refreshToken()`, `getAccessToken()`, `handleConnection()`, `dumpDictToLog()` |
-| S2 | **Valeur journalisée sur erreur d'écriture de configuration** | `setConfigItem()` inclut `str(Value)` dans son message d'erreur ; pour `access_token` / `refresh_token`, la valeur serait écrite dans le log d'erreur. | `setConfigItem()` |
-| S3 | **Jetons stockés sans chiffrement** | `pickle` + base64 : encodage, pas chiffrement ; lisibles par quiconque accède à `domoticz.db`. | `setConfigItem()` |
-| S4 | **`pickle.loads` sur des données issues de la base** | Désérialisation exécutée **avant** la comparaison du checksum (`loadCache()` compare après `getConfigItemAndChecksum()`), et le checksum est stocké au même endroit que les données : aucune protection contre une base altérée. | `getConfigItemAndChecksum()`, `loadCache()` |
-| S5 | **Dépendance à un proxy tiers** | Toute l'authentification et tout le transit des données Enedis passent par un service hébergé par un tiers (disponibilité, confiance, pérennité du contrat Enedis). Pas d'épinglage de certificat. | constantes `LOGIN_BASE_URI`, `API_BASE_URI` |
-| S6 | **`client_id` public en dur** | Acceptable : identifiant public du flux Device Flow, pas un secret. | `CLIENT_ID` |
-| S7 | **Fichier de debug persistant** | `tempfile` avec `delete=False`, jamais fermé ni purgé. | `onStart()` |
-| S8 | **Consentement affiché dans le log d'erreur** | URL + `user_code` (courte durée de vie) : sensibilité faible. | `parseDeviceCode()` |
+Les statuts ci-dessous valent pour la **v2.7.0** (le détail des constats reste celui de l'analyse à `1ef6adf`). Le chiffrement des jetons et la désérialisation `pickle` sont **acceptés** (backlog du plan 010, périmètre « masquage » M1 uniquement).
+
+| # | Constat | Détail | Source | Statut |
+|---|---|---|---|---|
+| S1 | **Jetons et `Authorization` écrits en clair en debug** | `dumpDictToLog()` affichait chaque clé/valeur : en-tête `Authorization` des requêtes de données, `refresh_token` / `usage_points_id` / `device_code` dans le corps des requêtes d'authentification, et réponses brutes (donc `access_token` / `refresh_token`). Dès `Mode3` ≥ 1, ces contenus allaient dans le **fichier `/tmp`** et, dès `Mode3` ≥ 2, dans le **log Domoticz**. | `getData()`, `refreshToken()`, `getAccessToken()`, `handleConnection()`, `dumpDictToLog()` | **Corrigé v2.7.0** (masquage M1 côté plugin, [§ 11](#11-journalisation-et-debug)). **Résiduel : D17** (log du framework Domoticz) |
+| S2 | **Valeur journalisée sur erreur d'écriture de configuration** | `setConfigItem()` incluait `str(Value)` dans son message d'erreur ; pour `access_token` / `refresh_token`, la valeur aurait été écrite dans le log d'erreur. | `setConfigItem()` | **Corrigé v2.7.0** (le message cite la clé et le type de la valeur) |
+| S3 | **Jetons stockés sans chiffrement** | `pickle` + base64 : encodage, pas chiffrement ; lisibles par quiconque accède à `domoticz.db`. | `setConfigItem()` | **Accepté** (backlog D9) ; format de persistance inchangé en v2.7.0 |
+| S4 | **`pickle.loads` sur des données issues de la base** | Désérialisation exécutée **avant** la comparaison du checksum (`loadCache()` compare après `getConfigItemAndChecksum()`), et le checksum est stocké au même endroit que les données : aucune protection contre une base altérée. | `getConfigItemAndChecksum()`, `loadCache()` | **Accepté** (backlog D9, risque accepté) |
+| S5 | **Dépendance à un proxy tiers** | Toute l'authentification et tout le transit des données Enedis passent par un service hébergé par un tiers (disponibilité, confiance, pérennité du contrat Enedis). Pas d'épinglage de certificat. | constantes `LOGIN_BASE_URI`, `API_BASE_URI` | **Accepté** (backlog D10) |
+| S6 | **`client_id` public en dur** | Acceptable : identifiant public du flux Device Flow, pas un secret. `client_secret` n'apparaît nulle part dans `plugin.py` (flux avec `client_id` seul) ; il est néanmoins masqué par défense en profondeur. | `CLIENT_ID` | Sans objet (Info) |
+| S7 | **Fichier de debug persistant** | `tempfile.NamedTemporaryFile(mode='w+t', delete=False, …)` dans le répertoire temporaire du système (`/tmp`) ; **aucun `chmod`** dans le plugin — droits par défaut de `tempfile` (mêmes règles que `mkstemp()` : utilisateur créateur seul, selon la documentation Python ; non vérifié sur le NAS). Depuis la v2.7.0 le fichier est **fermé** par `onStop()` (D16) et son contenu est **masqué** (S1) ; il **n'est jamais supprimé** par le plugin (purge manuelle). | `onStart()`, `onStop()` | **Partiellement corrigé v2.7.0** (fermeture + contenu masqué) ; suppression non implémentée (**accepté**) |
+| S8 | **Consentement affiché dans le log d'erreur** | URL + `user_code` (courte durée de vie) : sensibilité faible. Volontairement **conservé en clair** (nécessaire à l'utilisateur), vérifié par un test de non-régression. | `parseDeviceCode()` | **Accepté** |
+| S9 | **Debug du framework Domoticz (`Domoticz.Debugging(1)`) dès `Mode3` ≥ 2** | Activé aussi pour « Reset consentement », « Reset cache » et les « Faux clients ». Le log du framework n'est pas filtré par `maskSecrets()` : d'après la revue de code du plan 010 (non reproduit à l'exécution), il journalise en clair `Bearer`, `refresh_token` et la réponse de jetons dans le **log Domoticz**. | `onStart()` | **Risque connu — backlog (D17)**. Atténuation : avertissement dans [`readme.md`](../readme.md#paramètres-du-plugin) (n'activer que ponctuellement, puis purger le log) |
 
 ---
 
 ## 14. Dette technique et risques
 
 Gravité : **Haute** (sécurité ou disponibilité du service), **Moyenne** (comportement incorrect probable ou maintenabilité sérieuse), **Faible** (rare ou cosmétique), **Info**.
-Statut des constats : lecture statique du code à `1ef6adf` ; **aucun n'a été reproduit à l'exécution**. Les suites de correction sont au backlog du plan 009 (S2, S3) — **aucun correctif dans ce plan**.
+Les constats D1-D16 proviennent de la lecture statique du code à `1ef6adf` (**aucun reproduit à l'exécution** : les colonnes « Constat », « Preuve » et « Impact » décrivent l'état analysé, avec ses numéros de ligne). La colonne **Statut** donne la décision du plan 010 pour la **v2.7.0** ; D17 et D18 ont été identifiés pendant ce plan (revue de code, v2.7.0). Les correctifs sont couverts par la suite `tests/` (voir [`CHANGELOG.md`](../CHANGELOG.md)) ; le backlog résiduel est repris sous le tableau.
 
-| # | Constat | Gravité | Preuve (fonction) | Impact |
-|---|---|---|---|---|
-| D1 | `onCommand()` et `onNotification()` de module appellent `_plugin.onCommand` / `_plugin.onNotification` qui **n'existent pas** dans `BasePlugin` | Moyenne | fonctions de module (l. 2384-2403) ; absence de méthode dans la classe | `AttributeError` si Domoticz appelle ces callbacks (action sur le dispositif, notification) |
-| D2 | `iVersion` **non défini** si la regex de version ne correspond pas | Faible | `onStart()` (`if iVersion < 4011070` hors du `if (matchVersions)`) | `NameError` au démarrage si `DomoticzVersion` ne contient pas `x.y` |
-| D3 | `mergeCounters()` : la 2ᵉ boucle (« create production data … ») itère sur `self.dData[sUsagePointConsumptionId]` au lieu de la **production** ; le PRM fusionné étant une copie de la consommation, **aucune date production seule n'est ajoutée**. De plus, les accès `["value_year"]` ne sont pas protégés : un `KeyError` est avalé par un `except:` nu qui renvoie un échec global | Moyenne | `mergeCounters()` | Production aux dates sans consommation perdue ; échec global → nouvelle tentative dans 1 h |
-| D4 | `sTypeHour2 = "production1_hours"` en mode production : le test de **complétude du cache** compte deux fois les heures de production | Faible | `getDataHours()` | Seuil effectif ≈ 12 h (au lieu de 23 h) ; n'affecte **que** le test de cache, pas les valeurs stockées ; peut être voulu (production diurne). Rappel : `consumption2_hours` n'est jamais rempli (cf. § 4) |
-| D5 | Test `iIndexUnit == 256` **inaccessible** (`range(1, 256)`) ; si les 255 unités sont occupées, la fonction retourne `None` **sans message** | Faible | `getOrCreateDevice()` | Message d'erreur prévu jamais émis |
-| D6 | **`except:` nus** (au moins 14 occurrences) | Faible | `myMessage()`, `parseAccessToken()`, `mergeCounters()`, `exploreData*()`, `getCacheNoData()`, `onStart()`, `getConfigItemAndChecksum()`… | Erreurs masquées, diagnostic difficile |
-| D7 | **Monolithe** de ≈ 2 727 lignes, une seule classe à état partagé, étapes enchaînées par `if` successifs, **aucun test automatisé** | Moyenne | ensemble du fichier | Évolution risquée, régression difficile à détecter |
-| D8 | **Jetons et `Authorization` en clair en debug** (cf. S1, S2) | Haute | `dumpDictToLog()`, `setConfigItem()` | Fuite de secrets dans `/tmp` et dans les logs |
-| D9 | Jetons **non chiffrés** et `pickle.loads` sur données de la base (cf. S3, S4) | Moyenne | `getConfigItemAndChecksum()`, `loadCache()` | Compromission de la base ⇒ jetons lisibles / exécution de code |
-| D10 | **Dépendance à un proxy tiers** non maîtrisé (cf. S5) | Haute | `LOGIN_BASE_URI`, `API_BASE_URI` | Indisponibilité ou arrêt du proxy ⇒ plus de données Linky |
-| D11 | `setHistoryDays()` plafonne **définitivement** `iHistoryDaysForDaysView` à 35 j en historique court ; la branche « complet » ne restaure pas la valeur d'origine | Moyenne (probable) | `setHistoryDays()` | Dans une même session Domoticz, une récupération « complète » ultérieure pourrait se limiter à 35 j jusqu'au prochain redémarrage |
-| D12 | En production, le statut **500** est assimilé à « pas de production » **avant** la branche `429/500 → retry` | Faible | `handleConnection()` (étape `getdatahours`) | Une panne temporaire peut être prise pour une absence de production |
-| D13 | Option « Faux client 9 » (`Mode3` = 19) sans liste de faux PRM | Faible | `onStart()` | Option inutilisable (erreur « Erreur à la lecture des points de livraison ») |
-| D14 | Jours fériés : zone **Métropole** fixe ; préfixe `p` du premier mot interprété comme « production » (ex. `public`) | Faible | `isCost2()`, `parseHcParameter()` | Alsace-Moselle / outre-mer non gérés ; syntaxe HC ambiguë |
-| D15 | Code mort / inutilisé : constantes `API_ENDPOINT_DATA_DAILY_*`, `enedisDateToDatetime()`, attributs `bFirstMonths`, `dtDataInMemory` | Info | constantes, utilitaires | Bruit à la lecture |
-| D16 | Fichier de debug non fermé ni purgé (cf. S7) | Faible | `onStart()` | Accumulation de fichiers dans `/tmp` |
+| # | Constat | Gravité | Preuve (fonction) | Impact | Statut |
+|---|---|---|---|---|---|
+| D1 | `onCommand()` et `onNotification()` de module appellent `_plugin.onCommand` / `_plugin.onNotification` qui **n'existent pas** dans `BasePlugin` | Moyenne | fonctions de module (l. 2384-2403) ; absence de méthode dans la classe | `AttributeError` si Domoticz appelle ces callbacks (action sur le dispositif, notification) | **Corrigé v2.7.0** (D1a : méthodes `onCommand()` / `onNotification()` ajoutées à `BasePlugin`, debug seul, le texte de notification n'est pas journalisé) |
+| D2 | `iVersion` **non défini** si la regex de version ne correspond pas | Faible | `onStart()` (`if iVersion < 4011070` hors du `if (matchVersions)`) | `NameError` au démarrage si `DomoticzVersion` ne contient pas `x.y` | **Corrigé v2.7.0** (`iVersion = 0` initial + message « Version de Domoticz non reconnue » ; arrêt explicite) |
+| D3 | `mergeCounters()` : la 2ᵉ boucle (« create production data … ») itère sur `self.dData[sUsagePointConsumptionId]` au lieu de la **production** ; le PRM fusionné étant une copie de la consommation, **aucune date production seule n'est ajoutée**. De plus, les accès `["value_year"]` ne sont pas protégés : un `KeyError` est avalé par un `except:` nu qui renvoie un échec global | Moyenne | `mergeCounters()` | Production aux dates sans consommation perdue ; échec global → nouvelle tentative dans 1 h | **Corrigé v2.7.0** (boucle sur la production, `.get("value_year", 0)`, garde d'existence des deux PRM, `except Exception` journalisé) |
+| D4 | `sTypeHour2 = "production1_hours"` en mode production : le test de **complétude du cache** compte deux fois les heures de production | Faible | `getDataHours()` | Seuil effectif ≈ 12 h (au lieu de 23 h) ; n'affecte **que** le test de cache, pas les valeurs stockées ; peut être voulu (production diurne). Rappel : `consumption2_hours` n'est jamais rempli (cf. § 4) | **Comportement inchangé** ; commentaire explicatif ajouté dans le code (v2.7.0), caractérisé par des tests |
+| D5 | Test `iIndexUnit == 256` **inaccessible** (`range(1, 256)`) ; si les 255 unités sont occupées, la fonction retourne `None` **sans message** | Faible | `getOrCreateDevice()` | Message d'erreur prévu jamais émis | **Corrigé v2.7.0** (test d'unité pleine après la boucle, message « Trop de dispositifs », retour `None`) |
+| D6 | **`except:` nus** (au moins 14 occurrences) | Faible | `myMessage()`, `parseAccessToken()`, `mergeCounters()`, `exploreData*()`, `getCacheNoData()`, `onStart()`, `getConfigItemAndChecksum()`… | Erreurs masquées, diagnostic difficile | **Backlog** (seul celui de `mergeCounters()` est remplacé en v2.7.0) |
+| D7 | **Monolithe** de ≈ 2 727 lignes (≈ 2 776 en v2.7.0), une seule classe à état partagé, étapes enchaînées par `if` successifs ; **aucun test automatisé à `1ef6adf`** | Moyenne | ensemble du fichier | Évolution risquée, régression difficile à détecter | **Partiel** : harnais de tests (`tests/`, pytest) et CI ajoutés en v2.7.0 ; découpage du monolithe **backlog** |
+| D8 | **Jetons et `Authorization` en clair en debug** (cf. S1, S2) | Haute | `dumpDictToLog()`, `setConfigItem()` | Fuite de secrets dans `/tmp` et dans les logs | **Corrigé v2.7.0** (masquage M1, [§ 11](#11-journalisation-et-debug)) ; résiduel : D17 |
+| D9 | Jetons **non chiffrés** et `pickle.loads` sur données de la base (cf. S3, S4) | Moyenne | `getConfigItemAndChecksum()`, `loadCache()` | Compromission de la base ⇒ jetons lisibles / exécution de code | **Accepté** (risque accepté, backlog) |
+| D10 | **Dépendance à un proxy tiers** non maîtrisé (cf. S5) | Haute | `LOGIN_BASE_URI`, `API_BASE_URI` | Indisponibilité ou arrêt du proxy ⇒ plus de données Linky | **Backlog** (accepté) |
+| D11 | `setHistoryDays()` plafonne **définitivement** `iHistoryDaysForDaysView` à 35 j en historique court ; la branche « complet » ne restaure pas la valeur d'origine | Moyenne (probable) | `setHistoryDays()` | Dans une même session Domoticz, une récupération « complète » ultérieure pourrait se limiter à 35 j jusqu'au prochain redémarrage | **Backlog** : sans effet tant que `Mode2` ≤ 35 |
+| D12 | En production, le statut **500** est assimilé à « pas de production » **avant** la branche `429/500 → retry` | Faible | `handleConnection()` (étape `getdatahours`) | Une panne temporaire peut être prise pour une absence de production | **Inchangé (contournement volontaire)** ; comportement figé par un test de caractérisation |
+| D13 | Option « Faux client 9 » (`Mode3` = 19) sans liste de faux PRM | Faible | `onStart()` | Option inutilisable (erreur « Erreur à la lecture des points de livraison ») | **Backlog** |
+| D14 | Jours fériés : zone **Métropole** fixe ; préfixe `p` du premier mot interprété comme « production » (ex. `public`) | Faible | `isCost2()`, `parseHcParameter()` | Alsace-Moselle / outre-mer non gérés ; syntaxe HC ambiguë | **Backlog** |
+| D15 | Code mort / inutilisé : constantes `API_ENDPOINT_DATA_DAILY_*`, `enedisDateToDatetime()`, attributs `bFirstMonths`, `dtDataInMemory` | Info | constantes, utilitaires | Bruit à la lecture | **Backlog** |
+| D16 | Fichier de debug non fermé ni purgé (cf. S7) | Faible | `onStart()` | Accumulation de fichiers dans `/tmp` | **Corrigé v2.7.0** pour la fermeture (`onStop()` : `close()` + `fDebug = None`) ; la purge reste manuelle (accepté) |
+| D17 | **`Domoticz.Debugging(1)` activé dès `Mode3` ≥ 2** (y compris « Reset consentement », « Reset cache », « Faux clients ») : le log du framework Domoticz n'est pas couvert par le masquage (cf. S9) | Moyenne | `onStart()` | Jetons (`Bearer`, `refresh_token`, réponse de jetons) potentiellement écrits en clair dans le **log Domoticz** pendant le debug avancé | **Backlog — risque connu** ; avertissement dans [`readme.md`](../readme.md#paramètres-du-plugin) |
+| D18 | `setConfigItem()` : si la lecture de `Domoticz.Configuration()` lève une exception, `checksum` n'est jamais affecté et `return checksum` lève `UnboundLocalError` après le message d'erreur | Faible | `setConfigItem()` | Exception non gérée sur un chemin d'erreur de la persistance | **Backlog** |
+
+Backlog résiduel de la v2.7.0 (plan 010) : D6, D7 (découpage du monolithe), D10, D11, D13, D14, D15, D17, D18 ; D9 est un risque accepté.
 
 ### Corrections apportées aux hypothèses de l'analyse initiale (ARCos)
 
@@ -530,11 +553,9 @@ L'intégration (CI → image Docker → plugin → Domoticz) est décrite dans l
 
 Résumé (voir le document ci-dessus pour le détail et la source) :
 
-- Le workflow `build-domoticz.yml` (job `download-linky`) récupère aujourd'hui **`guillaumezin/DomoticzLinky`** (upstream), `refs/heads/master`, **non épinglé** — et **non ce fork**.
+- **Provenance épinglée** : le workflow `build-domoticz.yml` (job `download-linky`) récupère **ce fork** (`vzwingma/DomoticzLinky`) à un **SHA de commit** avec le tag en commentaire (`ref: <sha> # <tag>`) ; l'artefact ne contient que `plugin.py`. Le pin initial est `v2.6.1` (commit `f3df258`) ; la montée vers `v2.7.0` se fait après publication du tag. Les mises à jour sont proposées par **Renovate** (gestionnaire regex, `github-tags`) **sans automerge** : la PR est relue et fusionnée à la main. Décision : [ADR 007](https://github.com/vzwingma/domotique/blob/master/docs/adr/007-plugins-domoticz-provenance-epinglee.md). L'upstream `guillaumezin/DomoticzLinky` n'est plus consommé.
 - Le `Dockerfile` du projet copie `linky/plugin.py` dans `/opt/domoticz/userdata/plugins/DomoticzLinky/` de l'image `vzwingmadomatic/domoticz`.
-- Aucun script dzVents ne référence le plugin Linky ; la supervision de fraîcheur du dispositif `Linky <PRM>` est un point du backlog (suite S4).
-- Le changement de provenance (fork + ref épinglé) est au backlog du plan 009 (suite S1, soumise à ADR).
-
+- **Supervision Linky (dzVents)** : le **health check** quotidien (`Health_check_dzVents.lua`, 08:00) porte un **6ᵉ indicateur** « Linky » : les devices dont le nom commence par `Linky` sont recherchés ; anomalie si **aucun device** n'existe, si `lastUpdate` date de **plus de 36 h** (plugin inactif) ou si le device est en **`timedOut`** (aucune donnée Enedis depuis plus de 1,5 j, cf. [§ 10](#10-planification-et-résilience)). Les messages n'affichent que l'`idx` du device (jamais son nom, qui contient le PRM). Limite : après un redémarrage de Domoticz, `timedOut` reste faux jusqu'à 1,5 j ; la règle des 36 h reste valide. `Config_check.lua` (démarrage) exige en prérequis la présence d'un device `Linky*`. Détail : [`docs/ARCHITECTURE.md` du projet hôte](https://github.com/vzwingma/domotique/blob/master/docs/ARCHITECTURE.md) (§ 5.4 et § 6.2).
 ---
 
 ## 16. Glossaire

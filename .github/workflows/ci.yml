@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.13 = production (NAS), 3.11 = compatibilité minimale (ruff target-version py311)
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Installer les dépendances de développement
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Compilation du plugin
+        run: python -m py_compile plugin.py
+
+      - name: Lint (ruff)
+        run: python -m ruff check plugin.py tests
+
+      - name: Tests (pytest)
+        run: python -m pytest -q

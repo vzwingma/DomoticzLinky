@@ -23,7 +23,7 @@
 # <http://www.gnu.org/licenses/>.
 #
 """
-<plugin key="linky" name="Linky" author="vzwingma" version="2.6.1" externallink="https://github.com/vzwingma/DomoticzLinky">
+<plugin key="linky" name="Linky" author="vzwingma" version="2.7.0" externallink="https://github.com/vzwingma/DomoticzLinky">
     <params>
         <param field="Mode4" label="Heures creuses (vide pour désactiver, cf. readme pour la syntaxe)" width="500px" required="false" default="">
 <!--        <param field="Mode4" label="Heures creuses" width="500px">
@@ -161,6 +161,27 @@ HEADERS = {
 USAGE_POINT_SEPARATOR = " / "
 NB_WEEKS_LONG_HISTORY = 5
 NO_STATUS_ERROR_CODE = 999
+
+# Masquage des secrets dans les journaux (v2.7.0)
+SENSITIVE_KEYS = frozenset(("authorization", "access_token", "refresh_token", "device_code", "client_secret", "id_token", "cookie", "set-cookie"))
+MASK = "***"
+_SECRET_PATTERNS = (
+    (re.compile(r"(?i)\b(access_token|refresh_token|device_code|client_secret|id_token)=[^&\s'\"]*"), r"\1=" + MASK),
+    (re.compile(r"(?i)(\"(?:access_token|refresh_token|device_code|client_secret|id_token)\"\s*:\s*\")[^\"]*\""), r"\1" + MASK + "\""),
+    (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9\-._~+/=]+"), r"\1 " + MASK),
+)
+
+
+def maskSecrets(sText):
+    s = str(sText)
+    for oPattern, sRepl in _SECRET_PATTERNS:
+        s = oPattern.sub(sRepl, s)
+    return s
+
+
+def maskValue(key, value):
+    return MASK if str(key).casefold() in SENSITIVE_KEYS else maskSecrets(value)
+
 
 class BasePlugin:
     # boolean: to check that we are started, to prevent error messages when disabling or restarting the plugin
@@ -322,6 +343,7 @@ class BasePlugin:
 
 
     def myMessage(self, message, bNoLog=False):
+        message = maskSecrets(message)
         if (not bNoLog) and (self.iDebugLevel > 1):
             Domoticz.Log(message)
         if self.fDebug:
@@ -332,6 +354,7 @@ class BasePlugin:
 
 
     def myLog(self, message):
+        message = maskSecrets(message)
         Domoticz.Log(message)
         self.myMessage(message, True)
 
@@ -341,11 +364,13 @@ class BasePlugin:
 
 
     def myStatus(self, message):
+        message = maskSecrets(message)
         Domoticz.Status(message)
         self.myMessage("Status : " + message, True)
 
 
     def myError(self, message):
+        message = maskSecrets(message)
         Domoticz.Error(message)
         self.myMessage("Erreur : " + message, True)
 
@@ -636,10 +661,6 @@ class BasePlugin:
                 return oDevice
 
         for iIndexUnit in range(1, 256):
-            if iIndexUnit == 256:
-                self.showSimpleStepError(
-                    "Ne peut ajouter de dispositif Linky à la base de données. Trop de dispositifs déjà présents, faites le ménage SVP")
-                return None
             if iIndexUnit not in Devices:
                 Domoticz.Device(Name=self.sDeviceName + " " + sUsagePointCurrentId, DeviceID=sUsagePointCurrentId,
                                 Unit=iIndexUnit, Type=self.lType[self.iAlternateDevice],
@@ -653,6 +674,10 @@ class BasePlugin:
                     return None
                 else:
                     return Devices[iIndexUnit]
+
+        self.showSimpleStepError(
+            "Ne peut ajouter de dispositif Linky à la base de données. Trop de dispositifs déjà présents, faites le ménage SVP")
+        return None
 
 
     # insert usage in Domoticz DB
@@ -1029,19 +1054,23 @@ class BasePlugin:
             for sUsagePointConsumptionId in dCalculateCopy:
                 # Check if consumption only
                 if (
-                    not dCalculateCopy[sUsagePointConsumptionId]["production1"]["value_year"]
-                    and not dCalculateCopy[sUsagePointConsumptionId]["production2"]["value_year"]
-                    and (dCalculateCopy[sUsagePointConsumptionId]["consumption1"]["value_year"]
-                        or dCalculateCopy[sUsagePointConsumptionId]["consumption2"]["value_year"])
+                    not dCalculateCopy[sUsagePointConsumptionId]["production1"].get("value_year", 0)
+                    and not dCalculateCopy[sUsagePointConsumptionId]["production2"].get("value_year", 0)
+                    and (dCalculateCopy[sUsagePointConsumptionId]["consumption1"].get("value_year", 0)
+                        or dCalculateCopy[sUsagePointConsumptionId]["consumption2"].get("value_year", 0))
                 ):
                     for sUsagePointProductionId in dCalculateCopy:
                         # Merge with production only
                         if (
-                            not dCalculateCopy[sUsagePointProductionId]["consumption1"]["value_year"]
-                            and not dCalculateCopy[sUsagePointProductionId]["consumption2"]["value_year"]
-                            and (dCalculateCopy[sUsagePointProductionId]["production1"]["value_year"]
-                                or dCalculateCopy[sUsagePointProductionId]["production2"]["value_year"])
+                            not dCalculateCopy[sUsagePointProductionId]["consumption1"].get("value_year", 0)
+                            and not dCalculateCopy[sUsagePointProductionId]["consumption2"].get("value_year", 0)
+                            and (dCalculateCopy[sUsagePointProductionId]["production1"].get("value_year", 0)
+                                or dCalculateCopy[sUsagePointProductionId]["production2"].get("value_year", 0))
                         ):
+                            # Both usage points must have data in memory
+                            if sUsagePointConsumptionId not in self.dData or sUsagePointProductionId not in self.dData:
+                                continue
+
                             # Do merge
                             sNewUsagePointId = sUsagePointConsumptionId + USAGE_POINT_SEPARATOR + sUsagePointProductionId
                             self.myStatus("Fusionne les points de livraison " + sNewUsagePointId)
@@ -1062,7 +1091,7 @@ class BasePlugin:
                                     dMergedData["haspeak"] = dMergedData["haspeak"] or dProdData["haspeak"]
 
                             # create production data to merged device where dates don't coincide for consumption
-                            for sDate, dProdData in self.dData[sUsagePointConsumptionId]["data"].items():
+                            for sDate, dProdData in self.dData[sUsagePointProductionId]["data"].items():
                                 if sDate not in self.dData[sNewUsagePointId]["data"]:
                                     dMergedData = initData()
                                     for iHour, fValue in dProdData["production1_hours"].items():
@@ -1080,7 +1109,8 @@ class BasePlugin:
                             self.bNoProduction = False
                             if not self.saveDataToDb(sNewUsagePointId):
                                 bResult = False
-        except:
+        except Exception as err:
+            self.myError("Erreur lors de la fusion des points de livraison : " + str(err))
             bResult = False
         return bResult
 
@@ -1616,6 +1646,9 @@ class BasePlugin:
         if bProdMode :
             sType = "production"
             sTypeHour1 = "production1_hours"
+            # Volontaire : la production n'est stockée que dans production1_hours ; le double comptage
+            # (production1_hours + production1_hours) ramène le seuil de complétude à ~12 h (production diurne).
+            # Voir RETROCONCEPTION D4.
             sTypeHour2 = "production1_hours"
         else:
             sType = "consumption"
@@ -1976,13 +2009,13 @@ class BasePlugin:
                             if isinstance(dictToLog[x][y], dict):
                                 self.myDebug("------>'" + str(y) + " (" + str(len(dictToLog[x][y])) + "):")
                                 for z in dictToLog[x][y]:
-                                    self.myDebug("----------->'" + str(z) + "':'" + str(dictToLog[x][y][z]) + "'")
+                                    self.myDebug("----------->'" + str(z) + "':'" + maskValue(z, dictToLog[x][y][z]) + "'")
                             else:
-                                self.myDebug("------->'" + str(y) + "':'" + str(dictToLog[x][y]) + "'")
+                                self.myDebug("------->'" + str(y) + "':'" + maskValue(y, dictToLog[x][y]) + "'")
                     else:
-                        self.myDebug("--->'" + str(x) + "':'" + str(dictToLog[x]) + "'")
+                        self.myDebug("--->'" + str(x) + "':'" + maskValue(x, dictToLog[x]) + "'")
             else:
-                self.myDebug("Pas de dict reçu : " + str(dictToLog))
+                self.myDebug("Pas de dict reçu : " + maskSecrets(dictToLog))
 
 
     def onStart(self):
@@ -2030,6 +2063,7 @@ class BasePlugin:
         self.myDebug("onStart called")
 
         self.iAlternateDevice = 1
+        iVersion = 0
         matchVersions = re.search(r"(\d+)\.(\d+)", Parameters["DomoticzVersion"])
         if (matchVersions):
             iVersionMaj = int(matchVersions.group(1))
@@ -2037,6 +2071,8 @@ class BasePlugin:
             iVersion = (iVersionMaj * 1000000) + iVersionMin
             if iVersion >= 4011774:
                 self.iAlternateDevice = 0
+        else:
+            self.myError("Version de Domoticz non reconnue : " + str(Parameters["DomoticzVersion"]))
 
         # For test purpose
         #self.iAlternateDevice = 1
@@ -2178,6 +2214,8 @@ class BasePlugin:
         self.isStarted = False
         if self.fDebug:
             self.fDebug.flush()
+            self.fDebug.close()
+            self.fDebug = None
 
 
     def onConnect(self, Connection, Status, Description):
@@ -2208,6 +2246,17 @@ class BasePlugin:
     def onDisconnect(self, Connection):
         if self.isStarted:
             self.myDebug("onDisconnect called")
+
+
+    def onCommand(self, Unit, Command, Level, Hue):
+        if self.isStarted:
+            self.myDebug("onCommand ignoré (unité " + str(Unit) + ", commande " + str(Command) + ")")
+
+
+    def onNotification(self, Name, Subject, Text, Status, Priority, Sound, ImageFile):
+        # Le texte de la notification n'est volontairement pas journalisé
+        if self.isStarted:
+            self.myDebug("onNotification ignoré")
 
 
     def onHeartbeat(self):
@@ -2303,7 +2352,7 @@ class BasePlugin:
                 Config = s64Value  # set whole configuration if no key specified
             Config = Domoticz.Configuration(Config)
         except Exception as inst:
-            self.myError("Domoticz.Configuration operation failed: '" + str(inst) + "' for key \"" + str(Key) + "\" value \"" + str(Value) + "\"")
+            self.myError("Domoticz.Configuration operation failed: '" + str(inst) + "' for key \"" + str(Key)             + "\" (type " + type(Value).__name__ + ")")
         return checksum
 
 
