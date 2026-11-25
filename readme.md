@@ -1,7 +1,3 @@
-
-
-
-
 # Fork vzwingma / notes techniques
 
 - **Statut de maintenance** : fork maintenu par vzwingma ; upstream `guillaumezin/DomoticzLinky` non maintenu (l'auteur n'utilise plus Domoticz).
