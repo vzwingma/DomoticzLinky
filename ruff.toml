@@ -1,0 +1,9 @@
+target-version = "py311"
+
+# Globales injectées par Domoticz dans le plugin (évite de faux F821)
+builtins = ["Parameters", "Devices"]
+
+[lint]
+# Jeu de règles volontairement minimal : erreurs de syntaxe, formats, noms indéfinis.
+# Un jeu plus large ferait remonter des centaines d'alertes héritées (E722…).
+select = ["E9", "F63", "F7", "F82"]
