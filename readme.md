@@ -1,18 +1,14 @@
-# ⚠️ WARNING / ATTENTION ⚠️
 
-## 🇫🇷 **Projet probablement non maintenu**
 
-Je n’utilise plus Domoticz.  
-Le support et les mises à jour seront probablement très limités.
 
----
 
-## 🇬🇧 **Project likely unmaintained**
+# Fork vzwingma / notes techniques
 
-I no longer use Domoticz.  
-Support and updates will probably be very limited.
+- **Statut de maintenance** : fork maintenu par vzwingma ; upstream `guillaumezin/DomoticzLinky` non maintenu (l'auteur n'utilise plus Domoticz).
+- **Usage** : ce plugin est destiné à être embarqué dans l'image Docker Domoticz du projet [vzwingma/domotique](https://github.com/vzwingma/domotique). À ce jour, la CI de ce projet récupère encore l'upstream (branche `master`, non épinglée) et non ce fork ; voir [docs/ARCHITECTURE.md](https://github.com/vzwingma/domotique/blob/master/docs/ARCHITECTURE.md) (§ 5.4).
+- **Notes techniques** : rétroconception du code (v2.6.1, commit `1ef6adf`) — paramètres, machine à états, authentification, devices, persistance, dette technique : [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md).
 
-*English below*
+*EN: this is vzwingma's maintained fork; the upstream `guillaumezin/DomoticzLinky` is no longer maintained (its author no longer uses Domoticz). Technical reverse-engineering notes (in French) are in [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md). The user guide below is unchanged.*
 
 # Participer aux frais d'hébergement et au développement du plugin
 Le proxy permettant de gérer l'authentification auprès d'Enedis pour que le plugin Linky puisse récupérer les consommations / productions d'électricité, est hébergé sur un serveur dédié. Si vous le souhaitez, vous pouvez participer aux frais d'hébergement en cliquant sur le bouton ci-dessous.
