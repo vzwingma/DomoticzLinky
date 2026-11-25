@@ -1,7 +1,6 @@
 """Callbacks Domoticz : D1/D1a (onCommand, onNotification), D2 (iVersion), D16 (fDebug fermé à l'arrêt).
 
-Tests de BUG : `xfail(strict=True)` tant que le correctif n'est pas livré (ils échouent réellement
-sur le code actuel, ce qui prouve le défaut). Tests de caractérisation : verts avant et après.
+Tests de BUG (désormais verts, correctifs livrés) et tests de caractérisation (verts avant et après).
 """
 import pytest
 
@@ -12,22 +11,18 @@ SENT_NOTIF_TEXT = "NOTIF-TEXT-SENTINEL"
 # D1 / D1a : onCommand / onNotification définis au niveau module, sans méthode dans BasePlugin
 # ---------------------------------------------------------------------------
 class TestD1CommandNotification:
-    @pytest.mark.xfail(strict=True, reason="D1 : le callback module onCommand() appelle BasePlugin.onCommand, inexistante (AttributeError)")
     def test_module_onCommand_ne_leve_pas(self, plugin_module, plugin):
         plugin_module._plugin = plugin
         plugin_module.onCommand(1, "On", 0, 0)
 
-    @pytest.mark.xfail(strict=True, reason="D1 : le callback module onNotification() appelle BasePlugin.onNotification, inexistante (AttributeError)")
     def test_module_onNotification_ne_leve_pas(self, plugin_module, plugin):
         plugin_module._plugin = plugin
         plugin_module.onNotification("Nom", "Sujet", "Texte", 0, 0, "", "")
 
-    @pytest.mark.xfail(strict=True, reason="D1a : BasePlugin.onCommand absente")
     def test_methode_onCommand_ne_leve_pas(self, plugin):
         plugin.isStarted = True
         plugin.onCommand(1, "On", 0, 0)
 
-    @pytest.mark.xfail(strict=True, reason="D1a : BasePlugin.onNotification absente")
     def test_methode_onNotification_ne_log_pas_le_texte(self, plugin, captured):
         # Le texte d'une notification peut contenir n'importe quoi : il ne doit pas être journalisé
         plugin.isStarted = True
@@ -49,7 +44,6 @@ class TestD1CommandNotification:
 # D2 : onStart() lève UnboundLocalError si DomoticzVersion n'est pas reconnue
 # ---------------------------------------------------------------------------
 class TestD2DomoticzVersion:
-    @pytest.mark.xfail(strict=True, reason="D2 : iVersion non initialisé si la regex ne reconnaît pas DomoticzVersion (UnboundLocalError)")
     def test_version_inconnue_arret_explicite(self, plugin_module, plugin, domoticz):
         plugin.fDebug = None  # Mode3 = 0 en production : pas de fichier de debug
         plugin.iDebugLevel = 0
@@ -88,7 +82,6 @@ class TestD2DomoticzVersion:
 # D16 : fDebug n'est jamais fermé
 # ---------------------------------------------------------------------------
 class TestD16DebugFile:
-    @pytest.mark.xfail(strict=True, reason="D16 : onStop() ne ferme pas fDebug et ne le remet pas à None")
     def test_onStop_ferme_et_libere_fDebug(self, plugin):
         fichier = plugin.fDebug
         plugin.isStarted = True

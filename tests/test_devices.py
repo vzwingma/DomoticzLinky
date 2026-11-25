@@ -29,7 +29,6 @@ def installer_creation(domoticz, plugin_module, dicts_kwargs, bSucces=True):
 
 
 class TestD5Devices:
-    @pytest.mark.xfail(strict=True, reason="D5 : 255 unités occupées -> retour None silencieux, aucun message d'erreur (test == 256 inaccessible)")
     def test_aucune_unite_libre_retourne_none_avec_erreur(self, plugin_module, plugin, domoticz):
         remplir_devices(plugin_module, 255)
         assert plugin.getOrCreateDevice("PRM-SENTINEL-NEW") is None

@@ -93,7 +93,6 @@ class TestMergeNominal:
 
 
 class TestD3Bugs:
-    @pytest.mark.xfail(strict=True, reason="D3 : la boucle 'dates sans consommation' itère sur les données de consommation au lieu de celles de production")
     def test_dates_de_production_sans_consommation_sont_fusionnees(self, deux_prm):
         plugin, _ = deux_prm
         plugin.mergeCounters()
@@ -102,13 +101,11 @@ class TestD3Bugs:
         assert dMerged[D2]["production1_hours"] == {13: 8.0, 14: 9.0}
         assert dMerged[D2]["hasconsoprod"] is True
 
-    @pytest.mark.xfail(strict=True, reason="D3 : KeyError sur value_year quand un PRM n'a aucune donnée dans l'année (dCalculate vide)")
     def test_dCalculate_vide_retourne_true(self, plugin_module, plugin):
         plugin.dData = {PRM_A: {"data": {}, "state": plugin_module.initState()}}
         plugin.resetCalculate(PRM_A)  # dictionnaires vides, sans clé value_year
         assert plugin.mergeCounters() is True
 
-    @pytest.mark.xfail(strict=True, reason="D3 : un PRM sans donnée dans l'année fait échouer toute la fusion (KeyError)")
     def test_prm_vide_n_empeche_pas_la_fusion_des_autres(self, deux_prm, plugin_module):
         plugin, mock_save = deux_prm
         plugin.dData["PRM-SENTINEL-C"] = {"data": {}, "state": plugin_module.initState()}
@@ -116,14 +113,12 @@ class TestD3Bugs:
         assert plugin.mergeCounters() is True
         mock_save.assert_called_once_with(PRM_A + " / " + PRM_B)
 
-    @pytest.mark.xfail(strict=True, reason="D3 : pas de garde d'existence des deux PRM dans dData (KeyError)")
     def test_prm_absent_de_dData_est_ignore(self, deux_prm):
         plugin, mock_save = deux_prm
         del plugin.dData[PRM_B]  # présent dans dCalculate, absent de dData
         assert plugin.mergeCounters() is True
         mock_save.assert_not_called()
 
-    @pytest.mark.xfail(strict=True, reason="D3 : le `except:` nu masque l'erreur (aucun journal)")
     def test_exception_interne_est_journalisee(self, deux_prm, domoticz):
         plugin, mock_save = deux_prm
         mock_save.side_effect = RuntimeError("panne-simulee")
