@@ -164,7 +164,10 @@ CONSOAPI_TYPES = {
     API_ENDPOINT_DATA_CONSUMPTION_MAX_POWER: "puissance_conso_max_quotidienne",
     API_ENDPOINT_DATA_DAILY_CONSUMPTION: "consommation_quotidienne",
 }
-CONSOAPI_USER_AGENT_SUFFIX = " (+https://github.com/vzwingma/DomoticzLinky)"
+# En-têtes demandés par Conso API aux applications publiques (documentation, section développeurs) :
+# User-Agent "DomoticzLinky (<PRM tronqué>)" (4 derniers chiffres remplacés par xxxx) et From = dépôt du projet
+CONSOAPI_USER_AGENT_NAME = "DomoticzLinky"
+CONSOAPI_FROM = "https://github.com/vzwingma/DomoticzLinky"
 # Règles d'usage Conso API (page blocage-ip) : au plus 3 requêtes par jour et par PRM, retries compris
 CONSOAPI_MAX_REQUESTS_PER_DAY = 3
 # Au plus 1 lot d'historique (au-delà du lot le plus récent) par jour et par PRM
@@ -480,9 +483,11 @@ class BasePlugin:
     # get default headers
     def initHeaders(self, uri):
         headers = dict(HEADERS)
-        headers["User-Agent"] = "DomoticzLinkyPlugin/" + Parameters["Version"]
         if self.bConsoApi:
-            headers["User-Agent"] = headers["User-Agent"] + CONSOAPI_USER_AGENT_SUFFIX
+            headers["User-Agent"] = CONSOAPI_USER_AGENT_NAME + " (" + truncatePrm(self.sUsagePointId) + ")"
+            headers["From"] = CONSOAPI_FROM
+        else:
+            headers["User-Agent"] = "DomoticzLinkyPlugin/" + Parameters["Version"]
         headers["Host"] = uri
         return headers
 
@@ -2713,6 +2718,14 @@ def dictToQuotedString(dParams):
             result += "&"
         result += sKey + "=" + quote(str(sValue))
     return result
+
+
+# PRM tronqué des 4 derniers chiffres (ex : 2131273503xxxx), pour le User-Agent Conso API
+def truncatePrm(sPrm):
+    sPrm = str(sPrm or "").strip()
+    if len(sPrm) < 5:
+        return "xxxx"
+    return sPrm[:-4] + "xxxx"
 
 
 # Adaptateur Conso API V2 -> forme interne v5 lue par exploreDataHours() / exploreDataPeaks() (plan 011, T1.3)

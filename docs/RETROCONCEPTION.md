@@ -36,7 +36,7 @@
 | Élément | Valeur | Source |
 |---|---|---|
 | Clé du plugin | `key="linky"`, nom `Linky` | bloc XML `<plugin>` en tête de `plugin.py` (l. 25) |
-| Version | `3.0.0` (v2.7.0 : plan 010 ; analyse initiale : `2.6.1` @ `1ef6adf`, historique conservé) | bloc XML `<plugin>` ; envoyée aussi dans l'en-tête `User-Agent: DomoticzLinkyPlugin/<version>` (`initHeaders()`) |
+| Version | `3.0.0` (v2.7.0 : plan 010 ; analyse initiale : `2.6.1` @ `1ef6adf`, historique conservé) | bloc XML `<plugin>` ; envoyée aussi dans l'en-tête `User-Agent: DomoticzLinkyPlugin/<version>` de la source Legacy (`initHeaders()` ; en Conso API : `DomoticzLinky (<PRM tronqué>)`, [§ 17.2](#172-requêtes)) |
 | Auteur déclaré | `vzwingma` en v2.7.0 (`Barberousse` en v2.6.1) ; copyrights historiques conservés dans l'en-tête : Baptiste Candellier 2016, Asdepique777 2017, epierre 2017, Barberousse 2018-2021, vzwingma 2026- | en-tête de licence + attribut `author` |
 | Licence du plugin | **AGPL-3.0** (en-tête de `plugin.py` + fichier `LICENSE`) | en-tête du fichier |
 | Code tiers embarqué | classe `JoursFeries` issue de `etalab/jours-feries-france`, licence **MIT** (copyright Etalab 2020, texte de licence reproduit en commentaire) | classe `JoursFeries` (l. 2534 et suivantes) |
@@ -613,7 +613,7 @@ Plan d'action 011 et [ADR 008](https://github.com/vzwingma/domotique/blob/master
 | Hôte | `conso.boris.sh:443` (`API_BASE_URI[1]`) |
 | Chemin | `/api/<type>` ; `CONSOAPI_TYPES` : `consumption_load_curve` → `courbe_de_charge_consommation`, `daily_consumption_max_power` → `puissance_conso_max_quotidienne`, `daily_consumption` → `consommation_quotidienne` (non appelé) |
 | Paramètres | `pointId` (PRM), `dateDebut`, `dateFin` (**exclusive**, `AAAA-MM-JJ`) |
-| En-têtes | `Authorization: Bearer <jeton>` ; `User-Agent: DomoticzLinkyPlugin/<version> (+https://github.com/vzwingma/DomoticzLinky)` |
+| En-têtes | `Authorization: Bearer <jeton>` ; `User-Agent: DomoticzLinky (<PRM tronqué>)` (4 derniers chiffres remplacés par `xxxx`, `truncatePrm()`) ; `From: https://github.com/vzwingma/DomoticzLinky` (exigence de la [documentation Conso API](https://conso.boris.sh/documentation#pour-les-d%C3%A9veloppeurs)) |
 | Lots | courbe ≤ **7 jours** (limite Enedis `ADAM-DC-0015`, déjà le découpage de `calculateDaysLeft()`) ; puissance max par lots de **365 jours** |
 | Production | jamais demandée (étape `prod` ⇒ `save`) |
 | Machine à états | `idle` ⇒ `start` (pas de Device Flow) ; `start` lit `lConsoApiPrm` |
