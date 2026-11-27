@@ -23,11 +23,12 @@
 # <http://www.gnu.org/licenses/>.
 #
 """
-<plugin key="linky" name="Linky" author="vzwingma" version="3.0.0" externallink="https://github.com/vzwingma/DomoticzLinky">
+<plugin key="linky" name="Linky" author="vzwingma" version="3.1.0" externallink="https://github.com/vzwingma/DomoticzLinky">
     <params>
         <param field="Address" label="Source des données" width="300px" required="true" default="consoapi">
             <options>
                 <option label="Conso API (conso.boris.sh, API Enedis V2)" value="consoapi" default="true" />
+                <option label="Conso API + production (injection, compteurs producteurs)" value="consoapi_prod" />
                 <option label="Legacy (proxy API Enedis v5, repli)" value="legacy" />
             </options>
         </param>
@@ -158,9 +159,12 @@ SOURCE_LEGACY = "legacy"
 # Ancienne valeur, acceptée par compatibilité
 SOURCE_LEGACY_ALIASES = (SOURCE_LEGACY, "russandol")
 CONSOAPI_ADDRESS_INDEX = 1
-# Correspondance des points d'accès v5 internes vers les types Conso API V2 (pas de production : Q3)
+# Conso API avec production (v3.1.0, opt-in) : courbe de charge de production (injection) en plus
+SOURCE_CONSOAPI_PROD = "consoapi_prod"
+# Correspondance des points d'accès v5 internes vers les types Conso API V2
 CONSOAPI_TYPES = {
     API_ENDPOINT_DATA_CONSUMPTION_LOAD_CURVE: "courbe_de_charge_consommation",
+    API_ENDPOINT_DATA_PRODUCTION_LOAD_CURVE: "courbe_de_charge_production",
     API_ENDPOINT_DATA_CONSUMPTION_MAX_POWER: "puissance_conso_max_quotidienne",
     API_ENDPOINT_DATA_DAILY_CONSUMPTION: "consommation_quotidienne",
 }
@@ -177,6 +181,9 @@ CONSOAPI_RETRY_DELAY_HOURS = 3
 # Lots de puissance max (décision du 2026-11-27) ; la courbe reste par lots de 7 jours
 CONSOAPI_PEAK_BATCH_DAYS = 365
 DEFAULT_PEAK_BATCH_DAYS = 1095
+# Avec la production, la puissance max n'est demandée qu'une fois par semaine (le lot couvre les jours manquants),
+# pour garder une requête de réserve dans le budget du jour (cycle normal = courbe conso + courbe production)
+CONSOAPI_PROD_PEAK_INTERVAL_DAYS = 7
 PRM_PATTERN = re.compile(r"^\d{14}$")
 
 HEADERS = {
@@ -360,6 +367,8 @@ class BasePlugin:
     bOffPeakFirst = False
     # source Conso API (v3.0.0)
     bConsoApi = False
+    # Conso API : récupération de la production (injection) activée
+    bConsoApiProd = False
     sConsoApiToken = ""
     lConsoApiPrm = []
     # lots de puissance max (jours)
@@ -690,7 +699,7 @@ class BasePlugin:
 
         if self.bConsoApi:
             headers["Authorization"] = "Bearer " + self.sConsoApiToken
-            # dateFin exclusive, comme v5 ; pas de production (Q3)
+            # dateFin exclusive, comme v5
             query = {
                 "pointId": self.sUsagePointId,
                 "dateDebut": datetimeToEnedisDateString(dtStart),
@@ -1232,7 +1241,7 @@ class BasePlugin:
                 self.showStepError(True, "Erreur dans les données JSON : " + str(sys.exc_info()[0]))
                 return False
             else:
-                dJson = consoApiV2ToInternal(dJson)
+                dJson = consoApiV2ToInternal(dJson, "PROD" if bProduction else "CONS")
                 if dJson and ("meter_reading" in dJson):
                     try:
                         sReceivedUsagePointId = str(dJson["meter_reading"]["usage_point_id"])
@@ -1373,7 +1382,7 @@ class BasePlugin:
                 self.showStepError(False, "Erreur dans les données JSON : " + str(sys.exc_info()[0]))
                 return False
             else:
-                dJson = consoApiV2ToInternal(dJson)
+                dJson = consoApiV2ToInternal(dJson, "PROD" if bProduction else "CONS")
                 if dJson and ("meter_reading" in dJson):
                     try:
                         sReceivedUsagePointId = str(dJson["meter_reading"]["usage_point_id"])
@@ -1785,6 +1794,9 @@ class BasePlugin:
             bIncomplete = True
         if bIncomplete:
             if self.bConsoApi:
+                if self.bConsoApiProd and (not self.consoApiPeakDue(sUsagePointCurrentId)):
+                    self.myDebug("Puissance max Conso API déjà demandée il y a moins de " + str(CONSOAPI_PROD_PEAK_INTERVAL_DAYS) + " jours (mode production), utilisation du cache")
+                    return True
                 sVerdict = self.consoApiCheckBudget()
                 if sVerdict == "skip":
                     return True
@@ -1828,13 +1840,38 @@ class BasePlugin:
             return "stop"
         if not self.bFirstBatch:
             iHistory = int(dBudget["history"].get(self.sUsagePointId, 0))
-            # Un lot d'historique ne consomme jamais la dernière requête du jour
-            if (iHistory >= CONSOAPI_MAX_HISTORY_BATCHES_PER_DAY) or (iCount >= CONSOAPI_MAX_REQUESTS_PER_DAY - 1):
+            # Un lot d'historique ne consomme jamais la dernière requête du jour, sauf en mode production pour la
+            # production : la réserve de la tentative différée cède alors la place à l'historique de production
+            iLastAllowed = CONSOAPI_MAX_REQUESTS_PER_DAY - (0 if (self.bConsoApiProd and self.bProdMode) else 1)
+            # Mode production : la puissance max due cette semaine passe avant l'historique de consommation,
+            # pour que le lot du jour de la courbe de production garde sa requête
+            bPeakFirst = self.bConsoApiProd and (not self.bProdMode) and self.consoApiPeakDue(self.sUsagePointId)
+            if (iHistory >= CONSOAPI_MAX_HISTORY_BATCHES_PER_DAY) or (iCount >= iLastAllowed) or bPeakFirst:
                 self.myDebug("Lot d'historique Conso API reporté à un jour suivant")
                 return "skip"
             dBudget["history"][self.sUsagePointId] = iHistory + 1
             self.consoApiSaveBudget(dBudget)
         return "go"
+
+
+    # Mode production : la puissance max est-elle à redemander pour ce PRM (au plus une fois par semaine) ?
+    def consoApiPeakDue(self, sUsagePointCurrentId):
+        dLast = self.getConfigItem("consoapi_peak_last", {})
+        if not isinstance(dLast, dict):
+            return True
+        try:
+            dtLast = datetime.strptime(str(dLast.get(sUsagePointCurrentId, "")), "%Y-%m-%d")
+        except ValueError:
+            return True
+        return (datetime.now() - dtLast) >= timedelta(days=CONSOAPI_PROD_PEAK_INTERVAL_DAYS)
+
+
+    def consoApiMarkPeakRequested(self, sUsagePointCurrentId):
+        dLast = self.getConfigItem("consoapi_peak_last", {})
+        if not isinstance(dLast, dict):
+            dLast = {}
+        dLast[sUsagePointCurrentId] = datetimeToSQLDateString(datetime.now())
+        self.setConfigItem("consoapi_peak_last", dLast)
 
 
     # Comptabilise une requête réellement envoyée ; garde-fou si le budget est dépassé
@@ -2022,7 +2059,8 @@ class BasePlugin:
                 iStatus = getStatus(Data)
                 #self.dumpDictToLog(Data)
                 sError, sErrorDescription, sErrorUri = getError(Data)
-            if self.bConsoApi and self.consoApiHandleStatus(True, iStatus, Data):
+            # Conso API, production : 400 / 404 = pas de production pour ce PRM (traité plus bas, comme en Legacy)
+            if self.bConsoApi and (not (self.bProdMode and (iStatus in (400, 404)))) and self.consoApiHandleStatus(True, iStatus, Data):
                 pass
             elif (sError.casefold() == "invalid_token") and (not self.bRefreshToken):
                 self.sConnectionStep = "parseaccesstoken"
@@ -2048,7 +2086,8 @@ class BasePlugin:
                             self.setCacheEmpty(True, self.sUsagePointId, self.bProdMode)
                         self.showStepError(True, "Pas de données disponibles en consommation, récupération des données de production", True, True)
                     elif self.bNoProduction:
-                        if (sError.casefold() == 'adam-err0069') or (sError.casefold() == 'adam-err0123'):
+                        # Conso API : mémorisé pour ne pas consommer une requête par jour pour rien (vider le cache pour réessayer)
+                        if (sError.casefold() == 'adam-err0069') or (sError.casefold() == 'adam-err0123') or (self.bConsoApi and (iStatus in (400, 404))):
                             self.setCacheEmpty(True, self.sUsagePointId, self.bProdMode)
                         self.showStepError(True, "Pas de données disponibles en production", True, True)
                 self.sConnectionStep = "prod"
@@ -2122,6 +2161,8 @@ class BasePlugin:
             else:
                 if (not bUseCache) and (not self.exploreDataPeaks(Data, self.bProdMode)):
                     self.bHasAFail = True
+                elif (not bUseCache) and self.bConsoApi and self.bConsoApiProd:
+                    self.consoApiMarkPeakRequested(self.sUsagePointId)
                 # Still data to get, another batch ?
                 if self.stillDays(True):
                     self.calculateDaysLeft()
@@ -2151,8 +2192,8 @@ class BasePlugin:
 
         # if we didn't grab production data, do it
         if self.sConnectionStep == "prod":
-            # Pas de production en mode Conso API (Q3)
-            if (not self.bProdMode) and API_ENDPOINT_DATA_PRODUCTION_LOAD_CURVE and (not self.bConsoApi):
+            # Conso API : production seulement si activée (source « consoapi_prod », v3.1.0)
+            if (not self.bProdMode) and API_ENDPOINT_DATA_PRODUCTION_LOAD_CURVE and ((not self.bConsoApi) or self.bConsoApiProd):
                 self.bProdMode = True
                 self.sConnectionStep = "next"
             else:
@@ -2284,6 +2325,7 @@ class BasePlugin:
         sConsoApiToken = str(Parameters.get("Password", "") or "").strip()
         registerSecret(sConsoApiToken)
         bConsoApi = (sSource not in SOURCE_LEGACY_ALIASES)
+        bConsoApiProd = bConsoApi and (sSource == SOURCE_CONSOAPI_PROD)
         lConsoApiPrm = [sPrm.strip() for sPrm in sConsoApiPrm.split(",") if sPrm.strip()]
 
         # Username and Password must not stay in Parameters: it triggers an unwanted HTTP basic autorization header in old Domoticz Python Framework
@@ -2386,10 +2428,14 @@ class BasePlugin:
             self.sConsoApiToken = sConsoApiToken
             self.lConsoApiPrm = lConsoApiPrm
             self.iPeakBatchDays = CONSOAPI_PEAK_BATCH_DAYS
+            self.bConsoApiProd = bConsoApiProd
+            if self.bConsoApiProd:
+                self.myLog("Conso API : production (injection) activée, puissance max demandée au plus une fois tous les " + str(CONSOAPI_PROD_PEAK_INTERVAL_DAYS) + " jours")
             self.myLog("Source des données : Conso API (API Enedis V2), " + str(len(self.lConsoApiPrm)) + " point(s) de livraison, au plus " + str(CONSOAPI_MAX_REQUESTS_PER_DAY) + " requêtes par jour et par point")
         else:
             self.sConsoApiToken = ""
             self.lConsoApiPrm = []
+            self.bConsoApiProd = False
             self.iPeakBatchDays = DEFAULT_PEAK_BATCH_DAYS
             self.myLog("Source des données : Legacy (proxy API Enedis v5)")
         
@@ -2729,19 +2775,21 @@ def truncatePrm(sPrm):
 
 
 # Adaptateur Conso API V2 -> forme interne v5 lue par exploreDataHours() / exploreDataPeaks() (plan 011, T1.3)
-# V2 : {"idPrm", "grandeur": [{"grandeurMetier": "CONS", "unite", "points": [{"v", "d", ...}]}]}
+# V2 : {"idPrm", "grandeur": [{"grandeurMetier": "CONS" | "PROD", "unite", "points": [{"v", "d", ...}]}]}
 # Interne : {"meter_reading": {"usage_point_id", "interval_reading": [{"value", "date"}]}}
 # Horodatage fin d'intervalle et heure locale, comme v5 ; le pas de 15 min est absorbé par la moyenne horaire.
 # Toute autre forme est renvoyée inchangée (réponses Legacy, erreurs).
-def consoApiV2ToInternal(dJson):
+def consoApiV2ToInternal(dJson, sGrandeurMetier="CONS"):
     if not isinstance(dJson, dict) or ("grandeur" not in dJson) or ("meter_reading" in dJson):
         return dJson
     lGrandeurs = dJson.get("grandeur")
     if not isinstance(lGrandeurs, list):
         return {}
+    # Grandeur métier attendue : CONS (consommation) ou PROD (production / injection) ; absente = celle attendue
+    sGrandeurMetier = str(sGrandeurMetier or "CONS").upper()
     dGrandeur = None
     for dItem in lGrandeurs:
-        if isinstance(dItem, dict) and (str(dItem.get("grandeurMetier", "CONS")).upper() == "CONS"):
+        if isinstance(dItem, dict) and (str(dItem.get("grandeurMetier", sGrandeurMetier)).upper() == sGrandeurMetier):
             dGrandeur = dItem
             break
     lReadings = []
