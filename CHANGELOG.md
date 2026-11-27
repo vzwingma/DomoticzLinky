@@ -14,7 +14,7 @@ Version **incompatible** : nouveaux paramètres du matériel, reconfiguration n�
 - Nouveaux paramètres du matériel : `Address` = « Source des données » (Conso API / Legacy), `Username` = PRM (14 chiffres, plusieurs séparés par des virgules), `Password` = jeton Conso API (champ masqué). Jeton vide ou PRM invalide : erreur explicite au démarrage, aucune requête.
 - Adaptateur des réponses V2 vers le format interne : courbe de charge au pas de **15 min** (W, horodatage de fin d'intervalle), puissance maximale (VA), cœur du calcul (moyenne horaire, HC/HP, devices `Linky <PRM>` et leur historique) inchangé.
 - **Budget d'appels** conforme aux [règles d'usage de Conso API](https://conso.boris.sh/blocage-ip) : au plus **3 requêtes par jour et par PRM**, retries compris (compteur conservé en base, y compris après redémarrage) ; cycle normal = 2 requêtes (courbe 7 j + puissance max) ; historique complet **étalé** à raison d'un lot par jour ; **une seule** nouvelle tentative, 3 h plus tard (avant 22 h), en cas d'erreur temporaire ou de données de la veille incomplètes, sinon le lendemain ; pas de nouvelle requête au redémarrage si le cycle du jour a réussi ; requêtes strictement séquentielles.
-- En-tête `User-Agent: DomoticzLinkyPlugin/<version> (+https://github.com/vzwingma/DomoticzLinky)`.
+- En-têtes demandés par Conso API aux applications publiques : `User-Agent: DomoticzLinky (<PRM tronqué>)` (4 derniers chiffres remplacés par `xxxx`, ex. `2131273503xxxx`) et `From: https://github.com/vzwingma/DomoticzLinky`. La source Legacy garde `DomoticzLinkyPlugin/<version>`.
 - Tests : fixtures V2 anonymisées, `tests/test_consoapi_adapter.py`, `tests/test_consoapi_source.py`, masquage du jeton dans `tests/test_secrets_masking.py` (182 tests).
 
 ### Modifié

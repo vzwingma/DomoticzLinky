@@ -147,6 +147,8 @@ Conso API est un service gratuit dont le quota Enedis est partagé par tous ses 
 
 Les données d'un jour J sont publiées par Enedis vers 8 h à J+1 (parfois 1 à 2 h plus tard).
 
+**Identification auprès de Conso API** : comme le demande la [documentation du service](https://conso.boris.sh/documentation#pour-les-d%C3%A9veloppeurs), chaque requête porte les en-têtes `User-Agent: DomoticzLinky (<PRM tronqué>)` et `From: https://github.com/vzwingma/DomoticzLinky`. Le PRM y est tronqué : ses 4 derniers chiffres sont remplacés par `xxxx` (ex. `2131273503xxxx`), de sorte que le numéro complet n'est jamais transmis dans cet en-tête.
+
 #### Migration depuis la version 2.x
 
 La version 3.0.0 est **incompatible** : après la mise à jour, le plugin démarre en mode Conso API et s'arrête avec « le jeton … est vide » tant que le matériel n'est pas reconfiguré.

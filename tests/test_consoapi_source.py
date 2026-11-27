@@ -87,8 +87,32 @@ class TestRequetes:
         assert request["Verb"] == "GET"
         assert request["Headers"]["Authorization"] == "Bearer " + TOKEN
         assert request["Headers"]["Host"] == "conso.boris.sh"
-        assert request["Headers"]["User-Agent"].startswith("DomoticzLinkyPlugin/")
-        assert request["Headers"]["User-Agent"].endswith("(+https://github.com/vzwingma/DomoticzLinky)")
+        # Exigence Conso API : User-Agent « DomoticzLinky (<PRM tronqué>) » et From = dépôt du projet
+        assert request["Headers"]["User-Agent"] == "DomoticzLinky (0000000000xxxx)"
+        assert request["Headers"]["From"] == "https://github.com/vzwingma/DomoticzLinky"
+        assert PRM not in request["Headers"]["User-Agent"]
+
+    def test_entetes_deuxieme_prm(self, plugin_module, domoticz, monkeypatch):
+        freeze(plugin_module, monkeypatch, *DAY_COMPLETE)
+        plugin = start_consoapi(plugin_module, Username=PRM + "," + PRM_2)
+        agents = []
+
+        def responder(request):
+            agents.append(request["Headers"]["User-Agent"])
+            return nominal_responder(request) if PRM in request["URL"] else status_responder(404)(request)
+
+        run_cycle(plugin, responder)
+        assert agents == ["DomoticzLinky (0000000000xxxx)"] * 2 + ["DomoticzLinky (1111111111xxxx)"]
+
+    @pytest.mark.parametrize("prm, attendu", [("21312735030453", "2131273503xxxx"), ("1234", "xxxx"), ("", "xxxx"), (None, "xxxx")])
+    def test_troncature_prm(self, plugin_module, prm, attendu):
+        assert plugin_module.truncatePrm(prm) == attendu
+
+    def test_legacy_sans_from_ni_prm(self, plugin_module, domoticz):
+        plugin = start_consoapi(plugin_module, Address="legacy")
+        headers = plugin.initHeaders("example.org")
+        assert headers["User-Agent"].startswith("DomoticzLinkyPlugin/")
+        assert "From" not in headers
 
     def test_connexion_vers_conso_api(self, started, domoticz):
         run_cycle(started)
