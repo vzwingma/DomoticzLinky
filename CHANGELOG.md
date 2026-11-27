@@ -10,6 +10,8 @@ Version **incompatible** : nouveaux paramètres du matériel, reconfiguration n�
 
 ### Ajouté
 
+- **Documentation** : `readme.md` ne décrit plus que la source Conso API (testé sur Domoticz 2026.4) ; la source Legacy (configuration, hébergement, consentement, guide anglais) est déplacée dans [README.legacy](README.legacy).
+
 - **Source de données Conso API** ([conso.boris.sh](https://conso.boris.sh), API Enedis « Mesure synchrone V2 »), source **par défaut**. Pas de Device Flow : jeton personnel (Bearer) obtenu après consentement sur conso.boris.sh, valable 3 ans, révocable dans l'espace client Enedis.
 - Nouveaux paramètres du matériel : `Address` = « Source des données » (Conso API / Legacy), `Username` = PRM (14 chiffres, plusieurs séparés par des virgules), `Password` = jeton Conso API (champ masqué). Jeton vide ou PRM invalide : erreur explicite au démarrage, aucune requête.
 - Adaptateur des réponses V2 vers le format interne : courbe de charge au pas de **15 min** (W, horodatage de fin d'intervalle), puissance maximale (VA), cœur du calcul (moyenne horaire, HC/HP, devices `Linky <PRM>` et leur historique) inchangé.

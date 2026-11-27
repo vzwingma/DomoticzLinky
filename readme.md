@@ -1,11 +1,12 @@
-# Fork vzwingma / notes techniques
+# Plugin Linky pour Domoticz
 
-- **Statut de maintenance** : fork maintenu par vzwingma ; upstream `guillaumezin/DomoticzLinky` non maintenu (l'auteur n'utilise plus Domoticz).
-- **Usage** : ce plugin est destiné à être embarqué dans l'image Docker Domoticz du projet [vzwingma/domotique](https://github.com/vzwingma/domotique). La CI de ce projet récupère **ce fork**, épinglé par SHA de commit et tag (mises à jour par PR Renovate, sans automerge) ; `domotique` épingle la **v2.7.0** (SHA `a7b2320`) depuis le 2026-11-25 ; voir [docs/ARCHITECTURE.md](https://github.com/vzwingma/domotique/blob/master/docs/ARCHITECTURE.md) (§ 5.4) et l'[ADR 007](https://github.com/vzwingma/domotique/blob/master/docs/adr/007-plugins-domoticz-provenance-epinglee.md).
-- **Notes techniques** : rétroconception du code (analyse initiale v2.6.1, commit `1ef6adf`, annotée v2.7.0) — paramètres, machine à états, authentification, devices, persistance, sécurité, dette technique : [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md).
-- **Source des données (v3.0.0)** : par défaut [Conso API](https://conso.boris.sh) (API Enedis « Mesure synchrone V2 », jeton personnel) ; l'ancien proxy (API Enedis v5) reste disponible sous le nom **Legacy**. Voir [Source des données](#source-des-données-v300) et [Migration depuis la version 2.x](#migration-depuis-la-version-2x).
+Plugin [Domoticz](https://domoticz.com) qui récupère les données de votre compteur **Linky** (comptes particuliers) et les stocke dans le log d'un dispositif compteur électrique. Il s'appuie par défaut sur [Conso API](https://conso.boris.sh) (API Enedis « Mesure synchrone V2 », jeton personnel).
+
+Ce dépôt est un **fork maintenu** de [guillaumezin/DomoticzLinky](https://github.com/guillaumezin/DomoticzLinky), dont l'auteur n'utilise plus Domoticz et qui n'est plus maintenu. Le fork ajoute la source Conso API, conserve l'ancien proxy sous le nom « Legacy » (voir [README.legacy](README.legacy)) et vise un usage général, indépendant de tout projet particulier.
+
+- **Notes techniques** : rétroconception du code — paramètres, machine à états, authentification, devices, persistance, sécurité, dette technique : [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md).
 - **Historique** : [CHANGELOG.md](CHANGELOG.md) (version courante : **3.0.0**).
-- **Tests et CI** : le dossier `tests/` contient une suite `pytest` (faux module `Domoticz`, aucun Domoticz requis) ; `ruff.toml` configure un lint minimal (erreurs de syntaxe et noms non définis). La CI GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) exécute `py_compile`, `ruff` et `pytest` sur Python 3.11 et 3.13 (la production utilise Python 3.13.5). En local :
+- **Tests et CI** : le dossier `tests/` contient une suite `pytest` (faux module `Domoticz`, aucun Domoticz requis) ; `ruff.toml` configure un lint minimal. La CI GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) exécute `py_compile`, `ruff` et `pytest` sur Python 3.11 et 3.13. En local :
 
 ```
 python -m pip install -r requirements-dev.txt
@@ -14,21 +15,9 @@ python -m ruff check plugin.py tests
 python -m pytest -q
 ```
 
-*EN: this is vzwingma's maintained fork; the upstream `guillaumezin/DomoticzLinky` is no longer maintained (its author no longer uses Domoticz). Since version 3.0.0 the default data source is [Conso API](https://conso.boris.sh) (Enedis "Mesure synchrone V2" API, personal Bearer token, at most 3 requests per day and per meter); the former proxy (Enedis API v5) is kept as the "Legacy" source. Setup is described in French in "Source des données (v3.0.0)" below. Technical reverse-engineering notes (in French) are in [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md), the release history is in [CHANGELOG.md](CHANGELOG.md), and a French section "Paramètres du plugin" describes the settings (including a warning about the advanced debug modes). The English user guide below describes the Legacy source only.*
+*EN: this is a maintained fork of `guillaumezin/DomoticzLinky` (no longer maintained). Since 3.0.0 the default data source is [Conso API](https://conso.boris.sh) (Enedis "Mesure synchrone V2", personal Bearer token, at most 3 requests per day and per meter). The former proxy (Enedis API v5) is kept as the "Legacy" source, documented, with the original English guide, in [README.legacy](README.legacy). This guide is in French.*
 
-# Participer aux frais d'hébergement et au développement du plugin
-Le proxy permettant de gérer l'authentification auprès d'Enedis pour que le plugin Linky puisse récupérer les consommations / productions d'électricité, est hébergé sur un serveur dédié. Si vous le souhaitez, vous pouvez participer aux frais d'hébergement en cliquant sur le bouton ci-dessous.
-
-[![Faire un don pour l'hébergement](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7FJWZVDPXFTEG&source=url)
-
-Si vous le souhaitez, vous pouvez également faire un don pour encourager le développement du plugin en cliquant sur le bouton ci-dessous.
-
-[![Faire un don pour pour le développement](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=92UJFSAJTMBBL&item_name=Plugin+Domoticz+Linky+%28d%C3%A9veloppement%29&currency_code=EUR)
-
-# Plugin Linky pour Domoticz
-Ceci est un plugin pour [Domoticz](https://domoticz.com), récupérant les données Linky pour les comptes particuliers. Cela ne *fonctionne pas* avec les comptes professionnels, c'est une limitation de l'API Enedis Data Connect sur laquelle s'appuie le plugin. Pour ces comptes professionnels, il faudrait s'appuyer sur une API différente beaucoup plus lourde à mettre en place et en-dehors du périmètre de ce plugin.
-
-Les données sont collectées du compte utilisateur [Enedis](http://www.enedis.fr) et stockées dans le log d'un dispositif compteur électrique.
+Cela ne *fonctionne pas* avec les comptes professionnels : c'est une limitation de l'API Enedis sur laquelle s'appuie le plugin.
 
 ![Vue du dispositif sur le tableau de bord](assets/dashboardfr.jpg)
 
@@ -41,7 +30,7 @@ En cliquant sur le bouton "Rapport" :
 ![Exemple de rapport](assets/reportfr.jpg)
 
 ## Prérequis
-La version de Domoticz doit être 4.11070 ou plus récente. La version de Domoticz doit être 4.11774, 2020.1 ou plus récente pour pouvoir visualiser l'énergie produite et la différentiation jour / nuit. Attention, le plugin n'est pas compatible avec la version 2023.2 release de Domoticz (régression dans le code de Domoticz), vous devez avoir une version plus ancienne, ou une version beta ou release plus récente où la régression a été corrigée.
+Le plugin a été testé avec la version **2026.4** de Domoticz. La compatibilité avec les versions précédentes n'est pas garantie.
 
 Le framework python 3 doit être installé, suivez le guide https://www.domoticz.com/wiki/Using_Python_plugins, en particulier faites attention à installer la version "dev" si vous ne voyez pas apparaître le plugin dans la liste dans l'onglet de configuration Configuration / Matériel après avoir redémarré Domoticz.
 
@@ -56,7 +45,7 @@ Vous devez avoir un compteur Linky, créer un compte utilisateur sur [Enedis](ht
 ## Installation
 Copiez plugin.py dans le sous-répertoire plugins/DomoticzLinky de Domoticz ou placez vous dans le sous répertoire plugins de Domoticz and tapez la commande suivante :
 ```
-git clone https://github.com/guillaumezin/DomoticzLinky
+git clone https://github.com/vzwingma/DomoticzLinky
 ```
 
 Pour mettre à jour, écrasez plugin.py ou placez vous dans le sous répertoire plugins de Domoticz et tapez la commande suivante :
@@ -69,8 +58,8 @@ Redémarrez Domoticz.
 Si vous ne voyez pas le plugin dans l'onglet Configuration / Matériel, accordez à tout le monde l'autorisation de lecture du plugin et l'autorisation de lecture et d'exécution du répertoire, pour Linux :
 ```
 cd lerepertoire/plugins
-chmod ugo+rx DomoticzEbusd
-chmod ugo+r DomoticzEbusd/plugin.py
+chmod ugo+rx DomoticzLinky
+chmod ugo+r DomoticzLinky/plugin.py
 ```
 
 Redémarrez Domoticz.
@@ -96,7 +85,7 @@ A la première installation, commencez par vérifier dans les paramètres de Dom
 
 ![Ajout du matériel Linky](assets/addhardware5minfr.jpg)
 
-Ajoutez le matériel Linky dans l'onglet de configuration Configuration / Matériel.
+Ajoutez le matériel Linky dans l'onglet de configuration Configuration / Matériel, puis renseignez la source des données, le PRM et le jeton comme décrit dans [Configurer Conso API](#configurer-conso-api).
 
 ![Ajout du matériel Linky](assets/hardwaremenufr.jpg)
 
@@ -117,17 +106,24 @@ Le paramètre **« Source des données »** choisit d'où viennent les mesures :
 | Choix | Service | Authentification | Remarques |
 |---|---|---|---|
 | **Conso API** (défaut) | [conso.boris.sh](https://conso.boris.sh) — API Enedis « Mesure synchrone V2 » | jeton personnel saisi dans le matériel | source recommandée ; pas de production |
-| **Legacy** | ancien proxy d'authentification (API Enedis v5, en fin de vie) | consentement dans le log Domoticz (voir [Obtention du consentement](#obtention-du-consentement-source-legacy)) | conservée en repli jusqu'à la coupure de l'API v5 |
+| **Legacy** | ancien proxy d'authentification (API Enedis v5, en fin de vie) | consentement dans le log Domoticz | conservée en repli ; production disponible ; configuration, hébergement et consentement : [README.legacy](README.legacy) |
 
 #### Configurer Conso API
 
-1. Rendez-vous sur [conso.boris.sh](https://conso.boris.sh) et suivez la procédure de **consentement** Enedis (connexion à votre espace client Enedis). Vous obtenez un **jeton** (une longue chaîne `xxx.yyy.zzz`), valable **3 ans**.
+1. Rendez-vous sur [conso.boris.sh](https://conso.boris.sh) et suivez la procédure de **consentement** Enedis (connexion à votre espace client Enedis). Vous obtenez un **jeton** (une longue chaîne `xxx.yyy.zzz`), valable **3 ans**. À la fin du consentement, la page affiche votre jeton et les PRM auxquels il donne accès :
+
+   ![Résultat du consentement Conso API : jeton et PRM](assets/consoapi_token.png)
 2. Notez votre **PRM** (numéro de point de livraison, 14 chiffres, visible sur votre espace client Enedis ou sur le compteur).
-3. Dans Configuration / Matériel, sur le matériel Linky :
+3. Dans Domoticz / Configuration / Matériel, sur le matériel Linky :
    - « Source des données » = **Conso API** ;
    - « Conso API : PRM » = votre PRM (plusieurs PRM : séparez-les par des virgules) ;
    - « Conso API : jeton » = le jeton obtenu à l'étape 1 (champ masqué) ;
    - cliquez sur **Modifier**.
+
+<img width="702" height="922" alt="image" src="https://github.com/user-attachments/assets/ed4a737c-5666-439f-beff-ed03e159fd18" />
+
+
+   
 4. Au démarrage, le log indique « Source des données : Conso API ». Si le jeton est vide ou si un PRM ne fait pas 14 chiffres, le plugin s'arrête avec un message d'erreur et **n'envoie aucune requête**.
 
 **Révocation** : vous pouvez retirer l'accès à tout moment depuis votre espace client Enedis (rubrique de gestion du partage de vos données). Le plugin affichera alors « Jeton Conso API invalide ou expiré » ; refaites l'étape 1 et remplacez le jeton.
@@ -147,8 +143,6 @@ Conso API est un service gratuit dont le quota Enedis est partagé par tous ses 
 
 Les données d'un jour J sont publiées par Enedis vers 8 h à J+1 (parfois 1 à 2 h plus tard).
 
-**Identification auprès de Conso API** : comme le demande la [documentation du service](https://conso.boris.sh/documentation#pour-les-d%C3%A9veloppeurs), chaque requête porte les en-têtes `User-Agent: DomoticzLinky (<PRM tronqué>)` et `From: https://github.com/vzwingma/DomoticzLinky`. Le PRM y est tronqué : ses 4 derniers chiffres sont remplacés par `xxxx` (ex. `2131273503xxxx`), de sorte que le numéro complet n'est jamais transmis dans cet en-tête.
-
 #### Migration depuis la version 2.x
 
 La version 3.0.0 est **incompatible** : après la mise à jour, le plugin démarre en mode Conso API et s'arrête avec « le jeton … est vide » tant que le matériel n'est pas reconfiguré.
@@ -156,20 +150,7 @@ La version 3.0.0 est **incompatible** : après la mise à jour, le plugin démar
 1. Obtenez le jeton Conso API (voir ci-dessus).
 2. Ouvrez le matériel Linky (Configuration / Matériel), renseignez « Source des données » = Conso API, le PRM et le jeton, vérifiez que « Debug » = Non, puis **Modifier**.
 3. Les devices `Linky <PRM>` existants sont réutilisés (même `idx`, historique conservé). Il n'y a **pas de rattrapage** des jours manqués avant la migration au-delà de l'historique configuré.
-4. Pour revenir à l'ancien fonctionnement : « Source des données » = **Legacy** (consentement de l'ancien proxy, voir ci-dessous).
-
-### Obtention du consentement (source Legacy)
-Cette étape ne concerne que la source **Legacy** ; avec Conso API, le consentement se fait sur conso.boris.sh (voir ci-dessus).
-
-Commencez par surveiller l'onglet "Erreur" dans Configuration / Log. Aux premières connexions, le plugin doit vous donner l'adresse Web https://enedis.domoticz.russandol.pro/device à consulter et un code à y copier/coller pour obtenir le consentement du partage de données d'Enedis vers le plugin.
-
-![Adresse pour le consentement](assets/getlinkfr.jpg)
-
-Si vous ne répondez pas dans les minutes qui suivent, le plugin est arrêté. Pour relancer le processus, rendez-vous dans Configuration / Matériel, cliquez sur le plugin et sur Modifier.
-
-![Relancer le plugin](assets/updatehardwarefr.jpg)
-
-Après avoir activé le matériel et donné le consentement, vous devriez avoir un nouveau dispositif Linky dans l'onglet Mesures, et vous devriez pouvoir visualiser les courbes de consommation via le bouton Log de ce dispositif.
+4. Pour revenir à l'ancien fonctionnement : « Source des données » = **Legacy** (voir [README.legacy](README.legacy)).
 
 ### Heures creuses
 Vous pouvez remplir le champ "Heures creuses" pour choisir les plages horaires d'heures ("Utilisation 2" dans les courbes), ou laisser vide pour désactiver, voici des exemples :
@@ -265,7 +246,7 @@ Cette section résume les paramètres affichés dans Configuration / Matériel p
 | Non | 0 | Aucun debug. |
 | Simple (fichier de log dans /tmp) | 1 | Crée un fichier de debug dans `/tmp` (voir ci-dessous) ; les messages de debug ne vont que dans ce fichier, pas dans le log Domoticz. |
 | Avancé (fichier de log + debug Domoticz) | 2 | Fichier de debug **et** messages de debug recopiés dans le log Domoticz, **avec le debug complet du framework Domoticz** (voir l'avertissement ci-dessous). |
-| Legacy : effacer consentement et jetons, puis remettre Non | 3 | À **chaque démarrage** tant que ce choix est sélectionné, le plugin efface les jetons de la source Legacy : un nouveau consentement est demandé (voir [Obtention du consentement](#obtention-du-consentement-source-legacy)). Sans effet sur le jeton Conso API (paramètre du matériel). Active aussi le debug avancé. |
+| Legacy : effacer consentement et jetons, puis remettre Non | 3 | À **chaque démarrage** tant que ce choix est sélectionné, le plugin efface les jetons de la source Legacy : un nouveau consentement est demandé (voir [Obtention du consentement](README.legacy#obtention-du-consentement)). Sans effet sur le jeton Conso API (paramètre du matériel). Active aussi le debug avancé. |
 | Vider le cache des données, puis remettre Non | 4 | À **chaque démarrage** tant que ce choix est sélectionné, le plugin vide son cache : les données sont redemandées à Enedis à la prochaine collecte (utile pour appliquer les heures creuses aux anciennes données). Active aussi le debug avancé. |
 
 Les anciennes options « Faux client 0 à 9 » (serveur de test) ont été supprimées en 3.0.0. Après un effacement du consentement ou du cache, remettez « Debug » sur sa valeur précédente (en général « Non ») et cliquez sur « Modifier », sinon l'opération se répète à chaque redémarrage de Domoticz.
@@ -296,251 +277,29 @@ Cette erreur est liée à des données manquantes pour satisfaire les configurat
 ### Erreur "Serveurs inaccessibles à cette heure"
 Les serveurs d'Enedis sont inaccessibles la nuit, le plugin va de lui-même ré-essayer de récupérer vos données le lendemain matin après 8h.
 
-### Erreur "Trop d'échecs de communication, le plugin réessaiera plus tard" (source Legacy)
-Cela traduit en général un problème de quota : Enedis offre au plugin un certains nombre d'appels possibles vers son site pour l'ensemble des utilisateurs du plugin. Le plugin va de lui-même ré-essayer de récupérer vos données l'heure suivante. Si vous rencontrez souvent cette erreur, il vaut mieux diminuer le paramètre "Nombre de jours à récupérer pour les autres vues" à 7 pour diminuer le nombre d'appels.
-
-Dans certains cas, il s'agit d'un problème avec le jeton de consentement. Si vous mettez "Debug" à "Avancé", puis faites "Modifier", le log de Domoticz va vous donner un chemin vers un fichier de debug. En ouvrant ce fichier avec un éditeur de texte, si vous constatez de nombreuses "Technical error. Please try later.", vous pouvez essayer de faire un reset consentement comme décrit ci-dessous. N'oubliez pas de remettre ensuite "Debug" sur son ancienne valeur et de faire "Modifier".
-
-### Problèmes relatifs à l'obtention du consentement (source Legacy)
-Si vous avez des problèmes récurrents avec l'obtention du consentement, vous pouvez relancer l'étape en passant le paramètre "Debug" à "Legacy : effacer consentement et jetons, puis remettre Non" et cliquez sur "Modifier", puis remettez "Debug" à son ancienne position et refaites "Modifier". Ensuite retournez lire le chapitre [Obtention du consentement](#obtention-du-consentement-source-legacy).
+### Source Legacy
+Les erreurs propres à la source Legacy (« Trop d'échecs de communication », consentement) sont décrites dans [README.legacy](README.legacy#dépannage-source-legacy).
 
 ### Les problèmes persistent
-Passez le paramètre "Debug" à "Simple" et cliquez sur "Modifier". Observez le log de Domoticz, il vous indiquera le chemin vers un fichier log spécifique au plugin, par exemple /tmp/DomoticzLinky_2021_01_17_15_04_19_ukzvik3k.log. Ouvrez ce fichier avec un éditeur de texte pour voir ce qui se trame. Si vous n'y comprenez rien, envoyez le fichier à l'adresse e-mail qui s'affiche sur https://github.com/guillaumezin (pour que l'adresse soit visible, il faut que vous ayez un compte github et que vous soyez connecté) et en parallèle ouvrez un ticket de support sur https://github.com/guillaumezin/DomoticzLinky/issues. N'essayez pas d'attachez le fichier log au ticket de support, ça ne passera pas.
+Passez le paramètre "Debug" à "Simple" et cliquez sur "Modifier". Observez le log de Domoticz, il vous indiquera le chemin vers un fichier log spécifique au plugin, par exemple /tmp/DomoticzLinky_2021_01_17_15_04_19_ukzvik3k.log. Ouvrez ce fichier avec un éditeur de texte pour voir ce qui se trame. Si vous n'y comprenez rien, ouvrez un ticket de support sur https://github.com/vzwingma/DomoticzLinky/issues en décrivant le problème, sans y joindre le fichier de log brut (il contient votre PRM).
 
 ## Auteurs
 * **Baptiste Candellier** - *Kindle Linky plugin* - [linkindle](https://github.com/outadoc/linkindle)
 * **Asdepique777** - *Jeedom Linky plugin* - [jeedom_linky](https://github.com/Asdepique777/jeedom_linky)
 * **epierre** - *Linky external script for Domoticz* - [domoticz_linky](https://github.com/empierre/domoticz_linky)
-* **Guillaume Zin** - *Portage vers le plugin framework de Domoticz et adaptation du code de Device Flow Proxy Server pour Enedis* - [DomoticzLinky](https://github.com/guillaumezin/DomoticzLinky) et [DomoticzFlowProxyServer](https://github.com/guillaumezin/Device-Flow-Proxy-Server)
+* **Guillaume Zin** ([guillaumezin](https://github.com/guillaumezin)) - *Auteur du plugin d'origine : portage vers le plugin framework de Domoticz et adaptation du code de Device Flow Proxy Server pour Enedis* - [DomoticzLinky](https://github.com/guillaumezin/DomoticzLinky) et [DomoticzFlowProxyServer](https://github.com/guillaumezin/Device-Flow-Proxy-Server)
+* **vzwingma** ([GitHub](https://github.com/vzwingma)) - *Maintenance du fork, source Conso API (v3.0.0)* - [DomoticzLinky](https://github.com/vzwingma/DomoticzLinky)
 * **Frédéric Caillet** - *Contractualisation, maintenance et hébergement du code de Device Flow Proxy Server pour Enedis* - [DomoticzFlowProxyServer](https://github.com/russandol-sarl/Device-Flow-Proxy-Server)
 
-Vous pouvez aussi dans la liste des [contributeurs](https://github.com/guillaumezin/DomoticzLinky/contributors) qui a participé au projet.
+Voir aussi la liste des [contributeurs](https://github.com/guillaumezin/DomoticzLinky/contributors) du projet d'origine.
 
 ## Licence
 Ce projet est sous licence AGPLv3 - cf. fichier [LICENSE](LICENSE) pour plus de détails.
 
 ## Remerciements
-* Frédéric Caillet - son site Internet : [RUSSANDOL](https://www.russandol.pro) - pour l'hébergement et la maintenance de l'infrastructure intermédiaire d'obtention du consentement oAuth et la prise en charge contractuelle avec Enedis
-* Baptiste Candellier
-* Asdepique777
-* empierre
-* Domoticz team
-
-----------------------------------------------------------------
-
-# Contribute to hosting costs and plugin development
-The proxy used to manage authentication with Enedis so that the Linky plugin can grab electricity consumption / production data is hosted on a dedicated server. If you wish, you can participate in the accommodation costs by clicking on the button below.
-
-[![Faire un don pour l'hébergement](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7FJWZVDPXFTEG&source=url)
-
-If you wish, you can also donate to encourage the development of the plugin by clicking on the button below.
-
-[![Faire un don pour pour le développement](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=92UJFSAJTMBBL&item_name=Domoticz+Linky+plugin+%28development%29&currency_code=EUR)
-
-# Linky plugin for Domoticz
-This is a plugin for [Domoticz](https://domoticz.com), to grab data from french smartgrid meter Linky for personnal accounts. This does *not work* with professional accounts, it is a limitation of the Enedis Data Connect API on which the plugin relies. For these professional accounts, it would be necessary to rely on a different API that is much more cumbersome to set up and outside the scope of this plugin.
-
-The plugin grabs data from [Enedis](http://www.enedis.fr) user account and store them inside a counter device log.
-
-![Device on dashboard](assets/dashboarden.jpg)
-
-When clicking on "Log" button:
-
-![Example of data view](assets/devicelogen.jpg)
-
-When clicking on "Report" button:
-
-![Exemple de rapport](assets/reporten.jpg)
-
-## Prerequisites
-Domoticz version must be at least 4.11070. Domoticz version must be at least 4.11774 or 2020.1 to see energy production and day / night tariff differences. Please note, the plugin is not compatible with version 2023.2 release of Domoticz (regression in the Domoticz code), you must have an older version, or a more recent beta or release version where the regression has been corrected.
-
-The python 3 framework must be installed, follow the guide https://www.domoticz.com/wiki/Using_Python_plugins, in particular be careful to install the "dev" version if you do not see the plugin in the list in the Setup / Hardware configuration tab after restarting Domoticz.
-
-Check that the "EventSystem (Lua/Blockly/Scripts)" is enabled in dans "Setup / Settings / Other" :
-
-![Paramètres / Autre](assets/parametersothersen.jpg)
-
-![Paramètres / Autre](assets/parametersothers2en.jpg)
-
-You need to have a Linky meter, create a user account on [Enedis](http://www.enedis.fr), accept conditions on the website and check that you receive data on the website. In particular, check the hour view (go to "Suivre les mesures" and switch "affiché(e)s en" to "heures"), Enedis might ask for your permission the first time to collect hours data, this plugin won't work if you didn't fulfill this step. You can activate the recording and collection of data per hour on your Enedis account on "Gérer l'accès à mes données" in "Enregistrement de la consommation horaire" area and in "Collecte de la consommation horaire" area. Data might be not available the first weeks after Linky has be installed or enabled, be patient and check you get data on [Enedis](http://www.enedis.fr) website before blaming the plugin.
-
-## Installing
-Copy the plugin.py to domoticz directory/plugins/DomoticzLinky or change directory to domoticz directory/plugins and issue the following command:
-```
-git clone https://github.com/guillaumezin/DomoticzLinky
-```
-
-To update, overwrite plugin.py or change directory to domoticz directory/plugins/DomoticzLinky and issue the following command:
-```
-git pull
-```
-
-Restart Domoticz.
-
-If you don't see the plugin in the hardware configuration tab, give for everyone read permission to plugin and read and execute permission for directory, for Linux:
-```
-cd whatever/plugins
-chmod ugo+rx DomoticzEbusd
-chmod ugo+r DomoticzEbusd/plugin.py
-```
-
-Restart Domoticz.
-If you do not receive any data or get inconsistent values, in particular after an update, double-check that the recording and collection of data per hour are enabled on your Enedis account on "Gérer l'accès à mes données" in "Enregistrement de la consommation horaire" area and in "Collecte de la consommation horaire" area and wait 2 days.
-
-!["Gérer l'accès à mes données" menu](assets/enedisaccess.jpg)
-
-![Activate data collecting](assets/enediscollecte.jpg)
-
-If after that, it is still not good, you have to delete the device, and restart the plugin by clicking on the Linky hardware in the settings and clicking on "Update", or restart Domoticz.
-
-![Restart the plugin](assets/updatehardwareen.jpg)
-
-When the device is deleted or update the plugin from version 1 to version 2, the history is lost, which can be redownloaded over 730 days max (by modifying the parameter "Nombre de jours à récupérer pour les autres vues" of the plugin). When you have retrieved the history, do not forget to lower the number to 7, for example, so as not to overload the Enedis servers. The V2 plugin version 2 does not know how to retrieve the history of a device from the plugin version 1, the tables in the database are quite different.
-
-If while retrieving the data, the plugin detects a device with only consumption data, and another with only production data, it will create a new device merging the data for easy consultation.
-
-## Configuration
-On first install, check that "Accept new Hardware Devices" is enabled, at least temporaly (in Setup / Settings / System / Hardware/Devices).
-
-![Ajout du matériel Linky](assets/systemmenuen.jpg)
-
-![Ajout du matériel Linky](assets/addhardware5minen.jpg)
-
-Add the Linky hardware in Domoticz Setup / Hardware configuration tab.
-
-![Ajout du matériel Linky](assets/hardwaremenuen.jpg)
-
-![Add Linky hardware](assets/addhardwareen.jpg)
-
-You can configure the peak hour tariffs (Costs T1 for consumption and R1 for production) and off-peak hours (Costs T2 for consumption and R2 for production) in the Setup / Setup / Meters/Counters menu. In this menu, check that "Energy" is set to 1000.
-
-![Set hour tariffs](assets/costsettingen.jpg)
-
-In this same menu, at the bottom, check that "P1 Smart Meter" is indeed of type "With Decimals". 
-
-![Set decimals](assets/decimalsettingen.jpg)
-
-### Give consent
-To start, go to "Error" tab in Setup / Log. At first connections, the plugin shall give you the web address https://enedis.domoticz.russandol.pro/device to browse and a code to copy/paste to give Enedis authorizations to share your data with the plugin.
-
-![Address to give consent](assets/getlinken.jpg)
-
-If you don't answer quickly, the plugin will stop. To relaunch the process, go to Setup / Hardware, click on the plugin then on Update.
-
-![Restart the plugin](assets/updatehardwareen.jpg)
-
-After enabling the hardware and give authorizations, you shall have a new Linky Utility device and watch your energy consumption history with the Log button.
-
-### Off-peak hours
-You can fill in the "Off-peak hours" field to choose the hourly time ranges ("Usage 2" in the curves), or leave blank to deactivate, here are some examples:
-
-```
-2:00-7:00 13:00-16:00
-```
-configures off-peak hours from 2h to 7h and from 13h to 16h.
-
-```
-2:00-7:00 13:00-16:00 Wednesday 8:00-15:00 Saturday 09:00-11:00 12:00-16:00
-```
-configures off-peak hours from 8am to 3pm on Wednesday, from 9am to 11am and from 12pm to 4pm on Saturday and from 2am to 7am and from 1pm at 4pm the other days of the week.
-
-```
-2:00-7:00 13:00-16:00 me 08:00-15:00 sat 09:00-16:00
-```
-configures off-peak hours from 8am to 3pm on Wednesday, from 9am to 4pm on Saturday and from 2am to 7am and from 1pm to 4pm the other days of the week .
-
-```
-12345678901234 1:00-6:00 12:00-14:00 88888888888888 13:00-16:00
-```
-configure the off-peak hours for the time slots "1:00-6:00 12:00-14:00" for the delivery point "12345678901234" and the time slot "13:00-16:00" for the point delivery code "88888888888888".
-
-```
-2:00-04:00 16:00-19:00 12345678901234 1:00-6:00 12:00-14:00 Wednesday 11:00-16:00 88888888888888 13:00-16:00
-```
-configures the off-peak hours for the time slot "11:00-16:00" on Wednesday and "1:00-6:00 12:00-14:00" for the others days of the week for the delivery point "12345678901234", the time slot "13:00-16:00" for the delivery point "88888888888888" and the time slots "02:00-04:00 16:00-19:00" for all the other delivery points.
-
-```
-02:00-04:00 16:00-19:00 12345678901234 88888888888888 13:00-16:00
-```
-disables off-peak hours for the delivery point 12345678901234, configures off-peak hours for the "13:00-16:00" time slot for the "8888888888888888" delivery point and the time slots "02:00-04:00 16:00-19:00" for all other delivery points.
-
-```
-02:00-04:00 16:00-19:00 P 17:00-22:00 Wednesday 11:00-16:00 12345678901234 88888888888888 13:00-16:00
-```
-disables off-peak hours for the delivery point 12345678901234, configures off-peak hours for the "13:00-16:00" time slot for the "8888888888888888" delivery point and the time slots "02:00-04:00 16:00-19:00" for consumption and "11:00-16:00" on Wednesday and "17:00-22:00" for the other days of the week for production for all other delivery points.
-
-```
-02:00-04:00 16:00-19:00 P
-```
-configures the off-peak hours for the time slots "02:00-04:00 16:00-19:00" for consumption and disables off-peak hours for production for all delivery points.
-
-```
-02:00-04:00 sa 00:00-23:59 su 00:00-23:59 ba 00:00-23:59
-```
-configures the off-peak hours for the time slot "02:00-04:00", during the week-end and during bank holidays.
-
-To apply off-peak hours to old data, change the "Debug" setting to "Reset cache" and click "Edit", then put "Debug" back to its old position and do "Update" again.
-
-### Index Order
-By default, the plugin assigns peak-rate hours to "Usage 1" (T1 costs) and off-peak hours to "Usage 2" (T2 costs). Domoticz does not enforce a specific order, and other meters may use the reverse (for example, a TICMeter via the Zigbee for Domoticz plugin). The "Index Order" setting allows you to select "Off-peak then peak hours" so that all your meters use the same order—and therefore the same T1/T2 cost assignments.
-
-Note: This setting does not alter previously recorded history. To ensure consistent historical data, change the setting before retrieving the history, or delete the device and re-download the history (see above).
-
-### Display
-You can choose the number you want to see on the dashboard:
-
-![Device on dashboard](assets/dashboarden.jpg)
-
-* on first line: it is the instant consumption (Watt). This line is linked to "Consommation à montrer sur le tableau de bord (affichage principal)" plugin parameter
-
-* on next lines: it is the energy consumption (kWh). The "Today" value before is always 0, because Enedis provides the value for the day before only. These lines are linked to "Consommation à montrer sur le tableau de bord (affichage secondaire)" plugin parameter. These lines won't appear on main dashboard view tab, only in Utility tab
-
-### Data collect
-* You can choose the number of days to collect data for the short log (day). You can set the number of days to collect data for the short log (day) to 0 to disable data grabbing for this view. Note that Domoticz will clean every day data in the short log, based on the Short Log Sensors value the in Setup / Settings / Log History, you can increase the value there to get up to 7 days of short log history.
-
-![Log history setting](assets/loghistoryen.jpg)
-
-* You can choose the number of days to collect data for week/month/year log. If the value is greater than 35, the plugin will grab data only from time to time or when the value is changed, so as not to overload the Enedis servers. After getting data, they are stored and persist in Domoticz database
-
-## Troubleshooting
-### Service Status
-First consult the [status of Enedis services (Data Connect / API en production / Authorize and Metering Data v5)](https://datahub-enedis.fr/services-api/etat-des-services/). In case of error, the plugin will not be able to work either, it will be necessary to wait for the restoration of services.
-
-### The curves display the data in days of the week, the month and the year but not the data in hours
-Check that you have followed all the steps in the menu [Configuration](#configuration-1).
-
-### "Données manquantes pour mettre à jour le tableau de bord" error
-This error is related to missing data to satisfy the "Consommation à montrer sur le tableau de bord" display settings. This error must be transient. If it persists for several days in a row, try changing the "Consommation à montrer sur le tableau de bord" configuration. If this still persists, open a support request.
-
-### "Serveurs inaccessibles à cette heure" error
-The Enedis servers are inaccessible at night, the plugin will try to retrieve your data by itself the next morning after 8am.
-
-### "Trop d'échecs de communication, le plugin réessaiera plus tard" error
-This generally reflects a quota problem: Enedis gives the plugin a certain number of possible calls to its site for all users of the plugin. The plugin will on its own retry to retrieve your data the next hour. If you often encounter this error, it is better to decrease the "Nombre de jours à récupérer pour les autres vues" parameter to 7 to decrease the number of calls.
-
-In some cases, it is a problem with the consent token. If you set "Debug" to "Avancé", then do "Modify", the Domoticz log will give you a path to a debug file. By opening this file with a text editor, if you see many "Technical error. Please try later.", you can try to reset consent as described below. Don't forget to then put "Debug" back to its old value and do "Modify".
-
-### Consent Obtaining Issues
-If you have recurring problems with obtaining consent, you can restart the step by changing the "Debug" parameter to "Legacy : effacer consentement et jetons, puis remettre Non" and click on "Modify", then put "Debug" back to its old position and redo "Modify". Then go back to read the chapter [Give consent](#give-consent).
-
-### Problems persist
-Change the "Debug" parameter to "Simple" and click on "Modify". Observe the Domoticz log, it will show you the path to a plugin specific log file, for example /tmp/DomoticzLinky_2021_01_17_15_04_19_ukzvik3k.log. Open this file with a text editor to see what's going on. If you don't understand it, send the file to the email address that appears at https://github.com/guillaumezin (for the address to be visible, you must have a github account and you must be logged in) and at the same time open a support ticket on https://github.com/guillaumezin/DomoticzLinky/issues. Do not try to attach the log file to the support ticket, it will not work.
-
-## Authors
-* **Baptiste Candellier** - *Kindle Linky plugin* - [linkindle](https://github.com/outadoc/linkindle)
-* **Asdepique777** - *Jeedom Linky plugin* - [jeedom_linky](https://github.com/Asdepique777/jeedom_linky)
-* **epierre** - *Linky external script for Domoticz* - [domoticz_linky](https://github.com/empierre/domoticz_linky)
-* **Guillaume Zin** - *Port to Domoticz plugin framework and adaptation of Device Flow Proxy Server code for Enedis* - [DomoticzLinky](https://github.com/guillaumezin/DomoticzLinky) and [DomoticzFlowProxyServer](https://github.com/guillaumezin/Device-Flow-Proxy-Server)
-* **Frédéric Caillet** - *Contracting, maintenance and hosting of Device Flow Proxy Server code for Enedis* - [DomoticzFlowProxyServer](https://github.com/russandol-sarl/Device-Flow-Proxy-Server)
-
-See also the list of [contributors](https://github.com/guillaumezin/DomoticzLinky/contributors) who participated in this project.
-
-## License
-This project is licensed under the AGPLv3 license - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-* Frédéric Caillet - his web site: [RUSSANDOL](https://www.russandol.pro) - for the web hosting and maintenance of the oAuth consent middleware infrastructure and contracting with Enedis 
+* Guillaume Zin ([guillaumezin](https://github.com/guillaumezin)) - pour le plugin d'origine, publié sous licence AGPLv3, sur lequel ce fork repose
+* Conso API ([conso.boris.sh](https://conso.boris.sh)) - pour le service gratuit qui donne accès aux données Enedis
+* Frédéric Caillet - son site Internet : [RUSSANDOL](https://www.russandol.pro) - pour l'hébergement et la maintenance de l'ancienne infrastructure intermédiaire d'obtention du consentement oAuth et la prise en charge contractuelle avec Enedis
 * Baptiste Candellier
 * Asdepique777
 * empierre
