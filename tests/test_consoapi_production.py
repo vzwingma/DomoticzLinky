@@ -158,12 +158,15 @@ class TestHistorique:
     def long_history(self, plugin_module, domoticz, clock):
         return start_consoapi(plugin_module, Address="consoapi_prod", Mode2="30")
 
-    def test_puissance_max_due_avant_historique(self, long_history):
+    def test_puissance_max_due_avant_historique(self, long_history, domoticz):
         # Jour 1 : la puissance max est due, l'historique de consommation attend ; la production garde sa requête
         sent = run_cycle(long_history)
         assert types_of(sent) == ["courbe_de_charge_consommation", "puissance_conso_max_quotidienne",
                                   "courbe_de_charge_production"]
         assert count_today(long_history)[PRM] == 3
+        # L'historique de production, sans budget restant, est reporté sans faire échouer le cycle
+        assert not any("Budget Conso API du jour atteint" in m for sLevel in ("Status", "Error") for m in domoticz.logs[sLevel])
+        assert long_history.dateNextConnection.date() == datetime(2026, 11, 27).date()
 
     def test_historique_consommation_puis_production(self, long_history, clock):
         run_cycle(long_history)

@@ -1831,6 +1831,10 @@ class BasePlugin:
     def consoApiCheckBudget(self):
         dBudget = self.consoApiGetBudget()
         iCount = int(dBudget["count"].get(self.sUsagePointId, 0))
+        # Lot d'historique sans budget restant : simplement reporté (pas un échec du cycle)
+        if (not self.bFirstBatch) and (iCount >= CONSOAPI_MAX_REQUESTS_PER_DAY):
+            self.myDebug("Lot d'historique Conso API reporté à un jour suivant (budget du jour utilisé)")
+            return "skip"
         if iCount >= CONSOAPI_MAX_REQUESTS_PER_DAY:
             self.showSimpleStepError("Budget Conso API du jour atteint pour le point de livraison " + str(self.sUsagePointId) + " (" + str(iCount) + "/" + str(CONSOAPI_MAX_REQUESTS_PER_DAY) + " requêtes), reprise demain", True)
             self.bHasAFail = True
