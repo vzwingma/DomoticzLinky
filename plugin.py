@@ -2401,9 +2401,6 @@ class BasePlugin:
         #self.setConfigItem("off_peak_hours", self.sTarif)        
         self.loadCache()
         
-        #TODO pour le debug, à supprimer
-        #self.setConfigItem("next_history_grab_date", datetime(2000, 1, 1))
-
         self.myLog(
             "Si vous ne voyez pas assez de données dans la vue par heures, augmentez le paramètre Log des capteurs qui se trouve dans Réglages / Paramètres / Historique des logs")
 
