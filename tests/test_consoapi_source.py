@@ -56,8 +56,9 @@ class TestParametres:
         assert any(motif in e for e in domoticz.logs["Error"])
         assert not domoticz.Connection.called
 
-    def test_russandol(self, plugin_module, domoticz):
-        plugin = start_consoapi(plugin_module, Address="russandol")
+    @pytest.mark.parametrize("address", ["legacy", "russandol", "LEGACY"])
+    def test_legacy(self, plugin_module, domoticz, address):
+        plugin = start_consoapi(plugin_module, Address=address)
         assert plugin.isStarted is True
         assert plugin.bConsoApi is False
         assert plugin.iAlternateAddress == 0

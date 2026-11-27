@@ -35,7 +35,7 @@ class TestConversion:
         ]
 
     @pytest.mark.parametrize("body", [
-        {"meter_reading": {"usage_point_id": PRM, "interval_reading": []}},  # réponse Russandol v5
+        {"meter_reading": {"usage_point_id": PRM, "interval_reading": []}},  # réponse Legacy v5
         {"status": 401, "message": "Votre token est invalide"},             # erreur V2
         {"error": "invalid_token"},                                          # erreur OAuth
         [], None, "texte",
@@ -131,6 +131,6 @@ class TestErreursV2:
         assert sError == ""
         assert sDescription == "Votre token est invalide ou ne permet pas d'accéder à ce PRM"
 
-    def test_erreur_oauth_russandol_inchangee(self, plugin_module):
+    def test_erreur_oauth_legacy_inchangee(self, plugin_module):
         body = {"error": "invalid_token", "error_description": "expired"}
         assert plugin_module.getError(response(body=body, status=401)) == ("invalid_token", "expired", "")

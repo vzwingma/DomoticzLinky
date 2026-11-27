@@ -28,7 +28,7 @@
         <param field="Address" label="Source des données" width="300px" required="true" default="consoapi">
             <options>
                 <option label="Conso API (conso.boris.sh, API Enedis V2)" value="consoapi" default="true" />
-                <option label="Proxy Russandol (API Enedis v5, repli)" value="russandol" />
+                <option label="Legacy (proxy API Enedis v5, repli)" value="legacy" />
             </options>
         </param>
         <param field="Username" label="Conso API : PRM (14 chiffres, plusieurs séparés par des virgules)" width="300px" required="false" default=""/>
@@ -104,7 +104,7 @@
                 <option label="Non" value="0"  default="true" />
                 <option label="Simple (fichier de log dans /tmp)" value="1"/>
                 <option label="Avancé (fichier de log + debug Domoticz)" value="2"/>
-                <option label="Russandol : effacer consentement et jetons, puis remettre Non" value="3"/>
+                <option label="Legacy : effacer consentement et jetons, puis remettre Non" value="3"/>
                 <option label="Vider le cache des données, puis remettre Non" value="4"/>
             </options>
         </param>
@@ -133,7 +133,7 @@ import pickle
 import codecs
 import hashlib
 
-# Authentification (Device Flow) : proxy Russandol uniquement. Bac à sable opensrcdev retiré en v3.0.0
+# Authentification (Device Flow) : source Legacy uniquement. Bac à sable opensrcdev retiré en v3.0.0
 CLIENT_ID = ["d198fd52-61c0-4b77-8725-06a1ef90da9f"]
 
 LOGIN_BASE_PORT = ["443"]
@@ -142,7 +142,7 @@ API_ENDPOINT_DEVICE_CODE = ["/device/code"]
 API_ENDPOINT_DEVICE_TOKEN = ["/device/token"]
 VERIFY_CODE_URI = ["https://" + LOGIN_BASE_URI[0] + "/device?code="]
 
-# Index 0 = proxy Russandol, 1 = Conso API (v3.0.0)
+# Index 0 = Legacy (proxy API Enedis v5), 1 = Conso API (v3.0.0)
 API_BASE_PORT = ["443", "443"]
 API_BASE_URI = ["enedis.domoticz.russandol.pro", "conso.boris.sh"]
 API_ENDPOINT_DATA_URI = ["/data/proxy", "/api/"]
@@ -154,7 +154,9 @@ API_ENDPOINT_DATA_DAILY_PRODUCTION = '/metering_data_dp/v5/daily_production'
 
 # Source Conso API (API Enedis Mesure synchrone V2) — plan 011 / ADR 008
 SOURCE_CONSOAPI = "consoapi"
-SOURCE_RUSSANDOL = "russandol"
+SOURCE_LEGACY = "legacy"
+# Ancienne valeur, acceptée par compatibilité
+SOURCE_LEGACY_ALIASES = (SOURCE_LEGACY, "russandol")
 CONSOAPI_ADDRESS_INDEX = 1
 # Correspondance des points d'accès v5 internes vers les types Conso API V2 (pas de production : Q3)
 CONSOAPI_TYPES = {
@@ -333,7 +335,7 @@ class BasePlugin:
     dateNextConnection = None
     # integer: which device to use
     iAlternateDevice = 0
-    # integer: which address to use (0 = Russandol, 1 = Conso API)
+    # integer: which address to use (0 = Legacy, 1 = Conso API)
     iAlternateAddress = 0
     # to know that we come from refresh token step
     bRefreshToken = None
@@ -2271,12 +2273,12 @@ class BasePlugin:
                 self.fDebug.flush()
             return
 
-        # Source des données (v3.0.0) : Conso API par défaut, proxy Russandol en repli
+        # Source des données (v3.0.0) : Conso API par défaut, Legacy (proxy API Enedis v5) en repli
         sSource = str(Parameters.get("Address", "") or SOURCE_CONSOAPI).strip().casefold()
         sConsoApiPrm = str(Parameters.get("Username", "") or "")
         sConsoApiToken = str(Parameters.get("Password", "") or "").strip()
         registerSecret(sConsoApiToken)
-        bConsoApi = (sSource != SOURCE_RUSSANDOL)
+        bConsoApi = (sSource not in SOURCE_LEGACY_ALIASES)
         lConsoApiPrm = [sPrm.strip() for sPrm in sConsoApiPrm.split(",") if sPrm.strip()]
 
         # Username and Password must not stay in Parameters: it triggers an unwanted HTTP basic autorization header in old Domoticz Python Framework
@@ -2384,7 +2386,7 @@ class BasePlugin:
             self.sConsoApiToken = ""
             self.lConsoApiPrm = []
             self.iPeakBatchDays = DEFAULT_PEAK_BATCH_DAYS
-            self.myLog("Source des données : proxy Russandol (API Enedis v5)")
+            self.myLog("Source des données : Legacy (proxy API Enedis v5)")
         
         # useful only if we differentiate peak hours in cache
         ## do not load cache if off peak hours changed
@@ -2717,7 +2719,7 @@ def dictToQuotedString(dParams):
 # V2 : {"idPrm", "grandeur": [{"grandeurMetier": "CONS", "unite", "points": [{"v", "d", ...}]}]}
 # Interne : {"meter_reading": {"usage_point_id", "interval_reading": [{"value", "date"}]}}
 # Horodatage fin d'intervalle et heure locale, comme v5 ; le pas de 15 min est absorbé par la moyenne horaire.
-# Toute autre forme est renvoyée inchangée (réponses Russandol, erreurs).
+# Toute autre forme est renvoyée inchangée (réponses Legacy, erreurs).
 def consoApiV2ToInternal(dJson):
     if not isinstance(dJson, dict) or ("grandeur" not in dJson) or ("meter_reading" in dJson):
         return dJson
