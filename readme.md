@@ -114,11 +114,16 @@ Le paramètre **« Source des données »** choisit d'où viennent les mesures :
 
    ![Résultat du consentement Conso API : jeton et PRM](assets/consoapi_token.png)
 2. Notez votre **PRM** (numéro de point de livraison, 14 chiffres, visible sur votre espace client Enedis ou sur le compteur).
-3. Dans Configuration / Matériel, sur le matériel Linky :
+3. Dans Domoticz / Configuration / Matériel, sur le matériel Linky :
    - « Source des données » = **Conso API** ;
    - « Conso API : PRM » = votre PRM (plusieurs PRM : séparez-les par des virgules) ;
    - « Conso API : jeton » = le jeton obtenu à l'étape 1 (champ masqué) ;
    - cliquez sur **Modifier**.
+
+<img width="702" height="922" alt="image" src="https://github.com/user-attachments/assets/ed4a737c-5666-439f-beff-ed03e159fd18" />
+
+
+   
 4. Au démarrage, le log indique « Source des données : Conso API ». Si le jeton est vide ou si un PRM ne fait pas 14 chiffres, le plugin s'arrête avec un message d'erreur et **n'envoie aucune requête**.
 
 **Révocation** : vous pouvez retirer l'accès à tout moment depuis votre espace client Enedis (rubrique de gestion du partage de vos données). Le plugin affichera alors « Jeton Conso API invalide ou expiré » ; refaites l'étape 1 et remplacez le jeton.
