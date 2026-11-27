@@ -99,23 +99,13 @@
         </param>
         <param field="Mode1" label="Nombre de jours à récupérer pour la vue par heures (0 min, pour désactiver la récupération par heures, 7 max)" width="50px" required="false" default="7"/>
         <param field="Mode2" label="Nombre de jours à récupérer pour les autres vues (730 max)" width="50px" required="false" default="7"/>
-        <param field="Mode3" label="Debug" width="170px">
+        <param field="Mode3" label="Debug" width="400px">
             <options>
                 <option label="Non" value="0"  default="true" />
-                <option label="Simple" value="1"/>
-                <option label="Avancé" value="2"/>
-                <option label="Reset consentement" value="3"/>
-                <option label="Reset cache" value="4"/>
-                <option label="Faux client 0" value="10"/>
-                <option label="Faux client 1" value="11"/>
-                <option label="Faux client 2" value="12"/>
-                <option label="Faux client 3" value="13"/>
-                <option label="Faux client 4" value="14"/>
-                <option label="Faux client 5" value="15"/>
-                <option label="Faux client 6" value="16"/>
-                <option label="Faux client 7" value="17"/>
-                <option label="Faux client 8" value="18"/>
-                <option label="Faux client 9" value="19"/>
+                <option label="Simple (fichier de log dans /tmp)" value="1"/>
+                <option label="Avancé (fichier de log + debug Domoticz)" value="2"/>
+                <option label="Russandol : effacer consentement et jetons, puis remettre Non" value="3"/>
+                <option label="Vider le cache des données, puis remettre Non" value="4"/>
             </options>
         </param>
     </params>
@@ -143,19 +133,19 @@ import pickle
 import codecs
 import hashlib
 
-CLIENT_ID = ["d198fd52-61c0-4b77-8725-06a1ef90da9f", "9c551777-9d1b-447c-9e68-bfe6896ee002"]
+# Authentification (Device Flow) : proxy Russandol uniquement. Bac à sable opensrcdev retiré en v3.0.0
+CLIENT_ID = ["d198fd52-61c0-4b77-8725-06a1ef90da9f"]
 
-LOGIN_BASE_PORT = ["443", "443"]
-LOGIN_BASE_URI = ["enedis.domoticz.russandol.pro", "opensrcdev.alwaysdata.net"]
-API_ENDPOINT_DEVICE_CODE = ["/device/code", "/domoticzlinkyconnect/device/code"]
-API_ENDPOINT_DEVICE_TOKEN = ["/device/token", "/domoticzlinkyconnect/device/token"]
-VERIFY_CODE_URI = ["https://" + LOGIN_BASE_URI[0] + "/device?code=",
-                   "https://" + LOGIN_BASE_URI[1] + "/domoticzlinkyconnect/device?code="]
+LOGIN_BASE_PORT = ["443"]
+LOGIN_BASE_URI = ["enedis.domoticz.russandol.pro"]
+API_ENDPOINT_DEVICE_CODE = ["/device/code"]
+API_ENDPOINT_DEVICE_TOKEN = ["/device/token"]
+VERIFY_CODE_URI = ["https://" + LOGIN_BASE_URI[0] + "/device?code="]
 
-# Index 0 = proxy Russandol, 1 = bac à sable Russandol, 2 = Conso API (v3.0.0)
-API_BASE_PORT = ["443", "443", "443"]
-API_BASE_URI = ["enedis.domoticz.russandol.pro", "opensrcdev.alwaysdata.net", "conso.boris.sh"]
-API_ENDPOINT_DATA_URI = ["/data/proxy", "/domoticzlinkyconnect/data/proxy", "/api/"]
+# Index 0 = proxy Russandol, 1 = Conso API (v3.0.0)
+API_BASE_PORT = ["443", "443"]
+API_BASE_URI = ["enedis.domoticz.russandol.pro", "conso.boris.sh"]
+API_ENDPOINT_DATA_URI = ["/data/proxy", "/api/"]
 API_ENDPOINT_DATA_CONSUMPTION_LOAD_CURVE = '/metering_data_clc/v5/consumption_load_curve'
 API_ENDPOINT_DATA_CONSUMPTION_MAX_POWER = '/metering_data_dcmp/v5/daily_consumption_max_power'
 API_ENDPOINT_DATA_DAILY_CONSUMPTION = '/metering_data_dc/v5/daily_consumption'
@@ -165,7 +155,7 @@ API_ENDPOINT_DATA_DAILY_PRODUCTION = '/metering_data_dp/v5/daily_production'
 # Source Conso API (API Enedis Mesure synchrone V2) — plan 011 / ADR 008
 SOURCE_CONSOAPI = "consoapi"
 SOURCE_RUSSANDOL = "russandol"
-CONSOAPI_ADDRESS_INDEX = 2
+CONSOAPI_ADDRESS_INDEX = 1
 # Correspondance des points d'accès v5 internes vers les types Conso API V2 (pas de production : Q3)
 CONSOAPI_TYPES = {
     API_ENDPOINT_DATA_CONSUMPTION_LOAD_CURVE: "courbe_de_charge_consommation",
@@ -343,9 +333,7 @@ class BasePlugin:
     dateNextConnection = None
     # integer: which device to use
     iAlternateDevice = 0
-    # list: false customoer
-    lFalseCustomer = []
-    # integer: which address to use (production or sandbox)
+    # integer: which address to use (0 = Russandol, 1 = Conso API)
     iAlternateAddress = 0
     # to know that we come from refresh token step
     bRefreshToken = None
@@ -1936,7 +1924,7 @@ class BasePlugin:
             # Reset state
             self.clearState()
 
-            if self.iAlternateAddress:
+            if self.bConsoApi:
                 self.sConnectionStep = "start"
             else:
                 # If we have still valid access tokens, try do grab data
@@ -2142,8 +2130,6 @@ class BasePlugin:
         if self.sConnectionStep == "start":
             if self.bConsoApi:
                 self.lUsagePointIndex = list(self.lConsoApiPrm)
-            elif self.iAlternateAddress :
-                self.lUsagePointIndex = self.lFalseCustomer
             else:
                 self.lUsagePointIndex = self.getConfigItem("usage_points_id", [])
             if (len(self.lUsagePointIndex) > 0):
@@ -2254,29 +2240,7 @@ class BasePlugin:
         if self.iDebugLevel == 4:
             self.resetCache()            
 
-        if self.iDebugLevel >= 10:
-            self.iAlternateAddress = 1
-            if self.iDebugLevel == 10:
-                self.lFalseCustomer =["22516914714270"]
-            elif self.iDebugLevel == 11:
-                self.lFalseCustomer = ["11453290002823"]
-            elif self.iDebugLevel == 12:
-                self.lFalseCustomer = ["32320647321714"]
-            elif self.iDebugLevel == 13:
-                self.lFalseCustomer = ["12345678901234","10284856584123"]
-            elif self.iDebugLevel == 14:
-                self.lFalseCustomer = ["42900589957123"]
-            elif self.iDebugLevel == 15:
-                self.lFalseCustomer = ["24880057139941"]
-            elif self.iDebugLevel == 16:
-                self.lFalseCustomer = ["12655648759651"]
-            elif self.iDebugLevel == 17:
-                self.lFalseCustomer = ["64975835695673","63695879465986","22315546958763"]
-            elif self.iDebugLevel == 18:
-                self.lFalseCustomer = ["26584978546985"]
-        else:
-            self.iAlternateAddress = 0
-            self.lFalseCustomer = []
+        self.iAlternateAddress = 0
 
         self.myDebug("onStart called")
 
@@ -2307,12 +2271,12 @@ class BasePlugin:
                 self.fDebug.flush()
             return
 
-        # Source des données (v3.0.0) : Conso API par défaut, proxy Russandol en repli ; le bac à sable (Mode3 >= 10) force Russandol
+        # Source des données (v3.0.0) : Conso API par défaut, proxy Russandol en repli
         sSource = str(Parameters.get("Address", "") or SOURCE_CONSOAPI).strip().casefold()
         sConsoApiPrm = str(Parameters.get("Username", "") or "")
         sConsoApiToken = str(Parameters.get("Password", "") or "").strip()
         registerSecret(sConsoApiToken)
-        bConsoApi = (sSource != SOURCE_RUSSANDOL) and (self.iDebugLevel < 10)
+        bConsoApi = (sSource != SOURCE_RUSSANDOL)
         lConsoApiPrm = [sPrm.strip() for sPrm in sConsoApiPrm.split(",") if sPrm.strip()]
 
         # Username and Password must not stay in Parameters: it triggers an unwanted HTTP basic autorization header in old Domoticz Python Framework
