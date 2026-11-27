@@ -1,0 +1,31 @@
+{
+ "status": 400,
+ "message": "Paramètres invalides",
+ "error": {
+  "issues": [
+   {
+    "received": "type_inexistant",
+    "code": "invalid_enum_value",
+    "options": [
+     "daily_consumption",
+     "consumption_load_curve",
+     "consumption_max_power",
+     "daily_production",
+     "production_load_curve",
+     "index_consommation",
+     "index_production",
+     "consommation_quotidienne",
+     "production_quotidienne",
+     "puissance_conso_max_quotidienne",
+     "courbe_de_charge_consommation",
+     "courbe_de_charge_production"
+    ],
+    "path": [
+     "type"
+    ],
+    "message": "Invalid enum value. Expected 'daily_consumption' | 'consumption_load_curve' | 'consumption_max_power' | 'daily_production' | 'production_load_curve' | 'index_consommation' | 'index_production' | 'consommation_quotidienne' | 'production_quotidienne' | 'puissance_conso_max_quotidienne' | 'courbe_de_charge_consommation' | 'courbe_de_charge_production', received 'type_inexistant'"
+   }
+  ],
+  "name": "ZodError"
+ }
+}

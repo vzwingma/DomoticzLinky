@@ -23,8 +23,16 @@
 # <http://www.gnu.org/licenses/>.
 #
 """
-<plugin key="linky" name="Linky" author="vzwingma" version="2.7.0" externallink="https://github.com/vzwingma/DomoticzLinky">
+<plugin key="linky" name="Linky" author="vzwingma" version="3.0.0" externallink="https://github.com/vzwingma/DomoticzLinky">
     <params>
+        <param field="Address" label="Source des données" width="300px" required="true" default="consoapi">
+            <options>
+                <option label="Conso API (conso.boris.sh, API Enedis V2)" value="consoapi" default="true" />
+                <option label="Legacy (proxy API Enedis v5, repli)" value="legacy" />
+            </options>
+        </param>
+        <param field="Username" label="Conso API : PRM (14 chiffres, plusieurs séparés par des virgules)" width="300px" required="false" default=""/>
+        <param field="Password" label="Conso API : jeton (Bearer)" width="500px" required="false" default="" password="true"/>
         <param field="Mode4" label="Heures creuses (vide pour désactiver, cf. readme pour la syntaxe)" width="500px" required="false" default="">
 <!--        <param field="Mode4" label="Heures creuses" width="500px">
             <options>
@@ -91,23 +99,13 @@
         </param>
         <param field="Mode1" label="Nombre de jours à récupérer pour la vue par heures (0 min, pour désactiver la récupération par heures, 7 max)" width="50px" required="false" default="7"/>
         <param field="Mode2" label="Nombre de jours à récupérer pour les autres vues (730 max)" width="50px" required="false" default="7"/>
-        <param field="Mode3" label="Debug" width="170px">
+        <param field="Mode3" label="Debug" width="400px">
             <options>
                 <option label="Non" value="0"  default="true" />
-                <option label="Simple" value="1"/>
-                <option label="Avancé" value="2"/>
-                <option label="Reset consentement" value="3"/>
-                <option label="Reset cache" value="4"/>
-                <option label="Faux client 0" value="10"/>
-                <option label="Faux client 1" value="11"/>
-                <option label="Faux client 2" value="12"/>
-                <option label="Faux client 3" value="13"/>
-                <option label="Faux client 4" value="14"/>
-                <option label="Faux client 5" value="15"/>
-                <option label="Faux client 6" value="16"/>
-                <option label="Faux client 7" value="17"/>
-                <option label="Faux client 8" value="18"/>
-                <option label="Faux client 9" value="19"/>
+                <option label="Simple (fichier de log dans /tmp)" value="1"/>
+                <option label="Avancé (fichier de log + debug Domoticz)" value="2"/>
+                <option label="Legacy : effacer consentement et jetons, puis remettre Non" value="3"/>
+                <option label="Vider le cache des données, puis remettre Non" value="4"/>
             </options>
         </param>
     </params>
@@ -135,23 +133,48 @@ import pickle
 import codecs
 import hashlib
 
-CLIENT_ID = ["d198fd52-61c0-4b77-8725-06a1ef90da9f", "9c551777-9d1b-447c-9e68-bfe6896ee002"]
+# Authentification (Device Flow) : source Legacy uniquement. Bac à sable opensrcdev retiré en v3.0.0
+CLIENT_ID = ["d198fd52-61c0-4b77-8725-06a1ef90da9f"]
 
-LOGIN_BASE_PORT = ["443", "443"]
-LOGIN_BASE_URI = ["enedis.domoticz.russandol.pro", "opensrcdev.alwaysdata.net"]
-API_ENDPOINT_DEVICE_CODE = ["/device/code", "/domoticzlinkyconnect/device/code"]
-API_ENDPOINT_DEVICE_TOKEN = ["/device/token", "/domoticzlinkyconnect/device/token"]
-VERIFY_CODE_URI = ["https://" + LOGIN_BASE_URI[0] + "/device?code=",
-                   "https://" + LOGIN_BASE_URI[1] + "/domoticzlinkyconnect/device?code="]
+LOGIN_BASE_PORT = ["443"]
+LOGIN_BASE_URI = ["enedis.domoticz.russandol.pro"]
+API_ENDPOINT_DEVICE_CODE = ["/device/code"]
+API_ENDPOINT_DEVICE_TOKEN = ["/device/token"]
+VERIFY_CODE_URI = ["https://" + LOGIN_BASE_URI[0] + "/device?code="]
 
+# Index 0 = Legacy (proxy API Enedis v5), 1 = Conso API (v3.0.0)
 API_BASE_PORT = ["443", "443"]
-API_BASE_URI = ["enedis.domoticz.russandol.pro", "opensrcdev.alwaysdata.net"]
-API_ENDPOINT_DATA_URI = ["/data/proxy", "/domoticzlinkyconnect/data/proxy"]
+API_BASE_URI = ["enedis.domoticz.russandol.pro", "conso.boris.sh"]
+API_ENDPOINT_DATA_URI = ["/data/proxy", "/api/"]
 API_ENDPOINT_DATA_CONSUMPTION_LOAD_CURVE = '/metering_data_clc/v5/consumption_load_curve'
 API_ENDPOINT_DATA_CONSUMPTION_MAX_POWER = '/metering_data_dcmp/v5/daily_consumption_max_power'
 API_ENDPOINT_DATA_DAILY_CONSUMPTION = '/metering_data_dc/v5/daily_consumption'
 API_ENDPOINT_DATA_PRODUCTION_LOAD_CURVE = '/metering_data_plc/v5/production_load_curve'
 API_ENDPOINT_DATA_DAILY_PRODUCTION = '/metering_data_dp/v5/daily_production'
+
+# Source Conso API (API Enedis Mesure synchrone V2) — plan 011 / ADR 008
+SOURCE_CONSOAPI = "consoapi"
+SOURCE_LEGACY = "legacy"
+# Ancienne valeur, acceptée par compatibilité
+SOURCE_LEGACY_ALIASES = (SOURCE_LEGACY, "russandol")
+CONSOAPI_ADDRESS_INDEX = 1
+# Correspondance des points d'accès v5 internes vers les types Conso API V2 (pas de production : Q3)
+CONSOAPI_TYPES = {
+    API_ENDPOINT_DATA_CONSUMPTION_LOAD_CURVE: "courbe_de_charge_consommation",
+    API_ENDPOINT_DATA_CONSUMPTION_MAX_POWER: "puissance_conso_max_quotidienne",
+    API_ENDPOINT_DATA_DAILY_CONSUMPTION: "consommation_quotidienne",
+}
+CONSOAPI_USER_AGENT_SUFFIX = " (+https://github.com/vzwingma/DomoticzLinky)"
+# Règles d'usage Conso API (page blocage-ip) : au plus 3 requêtes par jour et par PRM, retries compris
+CONSOAPI_MAX_REQUESTS_PER_DAY = 3
+# Au plus 1 lot d'historique (au-delà du lot le plus récent) par jour et par PRM
+CONSOAPI_MAX_HISTORY_BATCHES_PER_DAY = 1
+# Une seule nouvelle tentative différée par jour, quelques heures plus tard
+CONSOAPI_RETRY_DELAY_HOURS = 3
+# Lots de puissance max (décision du 2026-11-27) ; la courbe reste par lots de 7 jours
+CONSOAPI_PEAK_BATCH_DAYS = 365
+DEFAULT_PEAK_BATCH_DAYS = 1095
+PRM_PATTERN = re.compile(r"^\d{14}$")
 
 HEADERS = {
     "Accept": "application/json",
@@ -163,7 +186,7 @@ NB_WEEKS_LONG_HISTORY = 5
 NO_STATUS_ERROR_CODE = 999
 
 # Masquage des secrets dans les journaux (v2.7.0)
-SENSITIVE_KEYS = frozenset(("authorization", "access_token", "refresh_token", "device_code", "client_secret", "id_token", "cookie", "set-cookie"))
+SENSITIVE_KEYS = frozenset(("authorization", "access_token", "refresh_token", "device_code", "client_secret", "id_token", "cookie", "set-cookie", "password"))
 MASK = "***"
 _SECRET_PATTERNS = (
     (re.compile(r"(?i)\b(access_token|refresh_token|device_code|client_secret|id_token)=[^&\s'\"]*"), r"\1=" + MASK),
@@ -172,8 +195,19 @@ _SECRET_PATTERNS = (
 )
 
 
+# Secrets connus en clair (jeton Conso API), masqués partout où ils apparaissent (v3.0.0)
+_KNOWN_SECRETS = set()
+
+
+def registerSecret(sSecret):
+    if sSecret and len(str(sSecret)) >= 8:
+        _KNOWN_SECRETS.add(str(sSecret))
+
+
 def maskSecrets(sText):
     s = str(sText)
+    for sSecret in _KNOWN_SECRETS:
+        s = s.replace(sSecret, MASK)
     for oPattern, sRepl in _SECRET_PATTERNS:
         s = oPattern.sub(sRepl, s)
     return s
@@ -301,9 +335,7 @@ class BasePlugin:
     dateNextConnection = None
     # integer: which device to use
     iAlternateDevice = 0
-    # list: false customoer
-    lFalseCustomer = []
-    # integer: which address to use (production or sandbox)
+    # integer: which address to use (0 = Legacy, 1 = Conso API)
     iAlternateAddress = 0
     # to know that we come from refresh token step
     bRefreshToken = None
@@ -323,6 +355,16 @@ class BasePlugin:
     bHistoryDaysForDaysViewGrabAll = False
     # order of indexes: False = peak hours first (default), True = off-peak hours first
     bOffPeakFirst = False
+    # source Conso API (v3.0.0)
+    bConsoApi = False
+    sConsoApiToken = ""
+    lConsoApiPrm = []
+    # lots de puissance max (jours)
+    iPeakBatchDays = DEFAULT_PEAK_BATCH_DAYS
+    # Conso API : échec temporaire pendant le cycle (429, 5xx, délai dépassé) -> une tentative différée possible
+    bConsoApiDefer = False
+    # Conso API : échec définitif pendant le cycle (400, 401, 403, budget) -> pas de nouvelle tentative avant demain
+    bConsoApiNoRetry = False
     # datetime of last successfull connection in memory
 
 
@@ -388,6 +430,8 @@ class BasePlugin:
                                                      Port=LOGIN_BASE_PORT[self.iAlternateAddress])
             self.httpLoginConn.Connect()
         else:
+            if not self.consoApiRegisterRequest():
+                return
             self.httpDataConn = Domoticz.Connection(Name="HTTPS connection", Transport="TCP/IP", Protocol="HTTPS",
                                                     Address=API_BASE_URI[self.iAlternateAddress],
                                                     Port=API_BASE_PORT[self.iAlternateAddress])
@@ -405,6 +449,8 @@ class BasePlugin:
         dtNow = datetime.now()
         # Prevent too quick connections, to not trigger protection mechanism
         if dtNow > (self.dtLastSend + timedelta(seconds=5)):
+            if (not self.bLoginConnect) and (not self.consoApiRegisterRequest()):
+                return None
             self.dtLastSend = dtNow
             self.sConnectionStep = "connecting"
             conn = Domoticz.Connection(Name="HTTPS connection", Transport="TCP/IP", Protocol="HTTPS", Address=address,
@@ -435,6 +481,8 @@ class BasePlugin:
     def initHeaders(self, uri):
         headers = dict(HEADERS)
         headers["User-Agent"] = "DomoticzLinkyPlugin/" + Parameters["Version"]
+        if self.bConsoApi:
+            headers["User-Agent"] = headers["User-Agent"] + CONSOAPI_USER_AGENT_SUFFIX
         headers["Host"] = uri
         return headers
 
@@ -635,17 +683,28 @@ class BasePlugin:
         else:
             headers = self.initHeaders(API_BASE_URI[self.iAlternateAddress] + ":" + API_BASE_PORT[self.iAlternateAddress])
 
-        headers["Authorization"] = self.getConfigItem("token_type", "") + " " + self.getConfigItem("access_token", "")
+        if self.bConsoApi:
+            headers["Authorization"] = "Bearer " + self.sConsoApiToken
+            # dateFin exclusive, comme v5 ; pas de production (Q3)
+            query = {
+                "pointId": self.sUsagePointId,
+                "dateDebut": datetimeToEnedisDateString(dtStart),
+                "dateFin": datetimeToEnedisDateString(dtEnd)
+            }
+            sUrl = API_ENDPOINT_DATA_URI[self.iAlternateAddress] + CONSOAPI_TYPES[uri] + "?" + dictToQuotedString(query)
+        else:
+            headers["Authorization"] = self.getConfigItem("token_type", "") + " " + self.getConfigItem("access_token", "")
 
-        query = {
-            "start": datetimeToEnedisDateString(dtStart),
-            "end": datetimeToEnedisDateString(dtEnd),
-            "usage_point_id": self.sUsagePointId
-        }
+            query = {
+                "start": datetimeToEnedisDateString(dtStart),
+                "end": datetimeToEnedisDateString(dtEnd),
+                "usage_point_id": self.sUsagePointId
+            }
+            sUrl = API_ENDPOINT_DATA_URI[self.iAlternateAddress] + uri + "?" + dictToQuotedString(query)
 
         sendData = {
             "Verb": "GET",
-            "URL": API_ENDPOINT_DATA_URI[self.iAlternateAddress] + uri + "?" + dictToQuotedString(query),
+            "URL": sUrl,
             "Headers": headers
             #"Data": dictToQuotedString(query)
         }
@@ -1168,6 +1227,7 @@ class BasePlugin:
                 self.showStepError(True, "Erreur dans les données JSON : " + str(sys.exc_info()[0]))
                 return False
             else:
+                dJson = consoApiV2ToInternal(dJson)
                 if dJson and ("meter_reading" in dJson):
                     try:
                         sReceivedUsagePointId = str(dJson["meter_reading"]["usage_point_id"])
@@ -1308,6 +1368,7 @@ class BasePlugin:
                 self.showStepError(False, "Erreur dans les données JSON : " + str(sys.exc_info()[0]))
                 return False
             else:
+                dJson = consoApiV2ToInternal(dJson)
                 if dJson and ("meter_reading" in dJson):
                     try:
                         sReceivedUsagePointId = str(dJson["meter_reading"]["usage_point_id"])
@@ -1469,13 +1530,13 @@ class BasePlugin:
 
     # Calculate days and date left for next batch
     def calculateDaysLeft(self):
-        # No more than 1095 days at once
-        self.iDaysLeft = self.iDaysLeft - 1095
+        # No more than 1095 days at once (365 with Conso API)
+        self.iDaysLeft = self.iDaysLeft - self.iPeakBatchDays
         if self.iDaysLeft <= 0:
-            daysToGet = self.iDaysLeft + 1095
+            daysToGet = self.iDaysLeft + self.iPeakBatchDays
             self.iDaysLeft = 0
         else:
-            daysToGet = 1095
+            daysToGet = self.iPeakBatchDays
         self.dateBeginDays = self.savedDateEndDays - timedelta(days=daysToGet)
         self.dateEndDays = self.savedDateEndDays
         self.savedDateEndDays = self.dateBeginDays
@@ -1600,6 +1661,8 @@ class BasePlugin:
         self.iUsagePointIndex = 0
         self.bHasAFail = False
         self.bGlobalHasAFail = False
+        self.bConsoApiDefer = False
+        self.bConsoApiNoRetry = False
         self.bRefreshToken = False
         self.sPrevUsagePointId = ""
 
@@ -1674,6 +1737,12 @@ class BasePlugin:
         else:
             bIncomplete = True
         if bIncomplete:
+            if self.bConsoApi:
+                sVerdict = self.consoApiCheckBudget()
+                if sVerdict == "skip":
+                    return True
+                if sVerdict == "stop":
+                    return False
             self.getData(API_ENDPOINT_DATA_PRODUCTION_LOAD_CURVE if bProdMode else API_ENDPOINT_DATA_CONSUMPTION_LOAD_CURVE, dtLoop, dtEnd)
             return False
         else:
@@ -1710,11 +1779,138 @@ class BasePlugin:
         else:
             bIncomplete = True
         if bIncomplete:
+            if self.bConsoApi:
+                sVerdict = self.consoApiCheckBudget()
+                if sVerdict == "skip":
+                    return True
+                if sVerdict == "stop":
+                    return False
             self.getData(API_ENDPOINT_DATA_CONSUMPTION_MAX_POWER, dtLoop, dtEnd)
             return False
         else:
             self.myDebug("Utilise les données de " + sType  + " du cache de " + datetimeToSQLDateString(dtStart) + " à " + datetimeToSQLDateString(dtEnd))
             return True
+
+
+    # ----- Conso API (v3.0.0, plan 011) -----
+
+    # Budget du jour persisté : {"day": "YYYY-MM-DD", "count": {PRM: n}, "history": {PRM: n}, "retry": bool}
+    def consoApiGetBudget(self):
+        sToday = datetimeToSQLDateString(datetime.now())
+        dBudget = self.getConfigItem("consoapi_budget", None)
+        if (not isinstance(dBudget, dict)) or (dBudget.get("day") != sToday):
+            dBudget = {"day": sToday, "count": {}, "history": {}, "retry": False}
+        dBudget.setdefault("count", {})
+        dBudget.setdefault("history", {})
+        dBudget.setdefault("retry", False)
+        return dBudget
+
+
+    def consoApiSaveBudget(self, dBudget):
+        self.setConfigItem("consoapi_budget", dBudget)
+
+
+    # Décide si une requête Conso API peut partir : "go", "skip" (lot d'historique reporté) ou "stop" (budget épuisé)
+    def consoApiCheckBudget(self):
+        dBudget = self.consoApiGetBudget()
+        iCount = int(dBudget["count"].get(self.sUsagePointId, 0))
+        if iCount >= CONSOAPI_MAX_REQUESTS_PER_DAY:
+            self.showSimpleStepError("Budget Conso API du jour atteint pour le point de livraison " + str(self.sUsagePointId) + " (" + str(iCount) + "/" + str(CONSOAPI_MAX_REQUESTS_PER_DAY) + " requêtes), reprise demain", True)
+            self.bHasAFail = True
+            self.bConsoApiNoRetry = True
+            self.sConnectionStep = "prod"
+            self.handleConnection()
+            return "stop"
+        if not self.bFirstBatch:
+            iHistory = int(dBudget["history"].get(self.sUsagePointId, 0))
+            # Un lot d'historique ne consomme jamais la dernière requête du jour
+            if (iHistory >= CONSOAPI_MAX_HISTORY_BATCHES_PER_DAY) or (iCount >= CONSOAPI_MAX_REQUESTS_PER_DAY - 1):
+                self.myDebug("Lot d'historique Conso API reporté à un jour suivant")
+                return "skip"
+            dBudget["history"][self.sUsagePointId] = iHistory + 1
+            self.consoApiSaveBudget(dBudget)
+        return "go"
+
+
+    # Comptabilise une requête réellement envoyée ; garde-fou si le budget est dépassé
+    def consoApiRegisterRequest(self):
+        if not self.bConsoApi:
+            return True
+        dBudget = self.consoApiGetBudget()
+        iCount = int(dBudget["count"].get(self.sUsagePointId, 0))
+        if iCount >= CONSOAPI_MAX_REQUESTS_PER_DAY:
+            self.myError("Budget Conso API du jour atteint, requête annulée")
+            self.bHasAFail = True
+            self.bConsoApiNoRetry = True
+            self.sConnectionStep = "done"
+            return False
+        dBudget["count"][self.sUsagePointId] = iCount + 1
+        self.consoApiSaveBudget(dBudget)
+        self.myStatus("Conso API : requête " + str(iCount + 1) + "/" + str(CONSOAPI_MAX_REQUESTS_PER_DAY) + " du jour pour le point de livraison " + str(self.sUsagePointId))
+        return True
+
+
+    # Échec temporaire : arrêt du cycle, une tentative différée possible (T1.5)
+    def consoApiDefer(self, sMessage, Data=None):
+        if Data:
+            self.showSimpleStatusError(Data, True)
+        self.showSimpleStepError(sMessage + ", nouvelle tentative plus tard", True)
+        self.bHasAFail = True
+        self.bConsoApiDefer = True
+        self.sConnectionStep = "done"
+
+
+    # Codes HTTP propres à Conso API ; renvoie True si le code a été traité
+    def consoApiHandleStatus(self, bHours, iStatus, Data):
+        if iStatus in (401, 403):
+            self.showSimpleStatusError(Data)
+            self.showSimpleStepError("Jeton Conso API invalide ou expiré, ou sans accès à ce point de livraison : vérifiez le paramètre jeton du matériel. Pas de nouvelle tentative avant demain")
+            self.bHasAFail = True
+            self.bConsoApiNoRetry = True
+            self.sConnectionStep = "done"
+            return True
+        if (iStatus == 429) or (iStatus >= 500):
+            self.consoApiDefer("Conso API indisponible (status " + str(iStatus) + ")", Data)
+            return True
+        if iStatus == 400:
+            self.showStatusError(bHours, Data)
+            self.bHasAFail = True
+            self.bConsoApiNoRetry = True
+            self.sConnectionStep = "prod"
+            return True
+        return False
+
+
+    # La veille est-elle complète dans le cache pour ce PRM ? (données de J disponibles vers 8 h à J+1)
+    def consoApiYesterdayComplete(self, sUsagePointCurrentId):
+        sYesterday = datetimeToSQLDateString(datetime.now() - timedelta(days=1))
+        try:
+            dDay = self.dData[sUsagePointCurrentId]["data"][sYesterday]
+            return (len(dDay["consumption1_hours"]) + len(dDay["consumption2_hours"])) >= 23
+        except Exception:
+            return False
+
+
+    # Fin de cycle : demain par défaut, ou une seule tentative différée de quelques heures
+    def consoApiScheduleNext(self):
+        bIncomplete = False
+        if self.iHistoryDaysForHoursView > 0:
+            for sPrm in self.lUsagePointIndex:
+                if not self.consoApiYesterdayComplete(sPrm.upper().strip()):
+                    bIncomplete = True
+        if (self.bConsoApiDefer or bIncomplete) and (not self.bConsoApiNoRetry):
+            dBudget = self.consoApiGetBudget()
+            dtNow = datetime.now()
+            dtRetry = dtNow + timedelta(hours=CONSOAPI_RETRY_DELAY_HOURS)
+            if (not dBudget["retry"]) and (dtRetry.date() == dtNow.date()) and (dtRetry.hour < 22):
+                dBudget["retry"] = True
+                self.consoApiSaveBudget(dBudget)
+                self.dateNextConnection = dtRetry
+                self.myStatus("Conso API : données incomplètes ou service indisponible, unique nouvelle tentative du jour à " + datetimeToSQLDateTimeString(dtRetry))
+                return
+        # Sinon : connexion demain (déjà programmée par onHeartbeat)
+        if self.dateNextConnection is None or self.dateNextConnection.date() <= datetime.now().date():
+            self.setNextConnection(True)
 
 
     # Handle the connection state machine
@@ -1730,7 +1926,7 @@ class BasePlugin:
             # Reset state
             self.clearState()
 
-            if self.iAlternateAddress:
+            if self.bConsoApi:
                 self.sConnectionStep = "start"
             else:
                 # If we have still valid access tokens, try do grab data
@@ -1749,7 +1945,10 @@ class BasePlugin:
 
         # We should never reach this
         elif (self.sConnectionStep == "connecting") or (self.sConnectionStep == "sending"):
-            if (self.iTimeoutCount >= 3):
+            if (self.iTimeoutCount >= 3) and self.bConsoApi:
+                # Conso API : pas de renvoi automatique, une seule tentative différée (T1.5)
+                self.consoApiDefer("Délai de réponse de Conso API dépassé")
+            elif (self.iTimeoutCount >= 3):
                 self.sConnectionStep = "retry"
                 self.setNextConnectionForLater(self.iInterval)
             else:
@@ -1818,7 +2017,9 @@ class BasePlugin:
                 iStatus = getStatus(Data)
                 #self.dumpDictToLog(Data)
                 sError, sErrorDescription, sErrorUri = getError(Data)
-            if (sError.casefold() == "invalid_token") and (not self.bRefreshToken):
+            if self.bConsoApi and self.consoApiHandleStatus(True, iStatus, Data):
+                pass
+            elif (sError.casefold() == "invalid_token") and (not self.bRefreshToken):
                 self.sConnectionStep = "parseaccesstoken"
                 self.refreshToken()
             elif iStatus == 403:
@@ -1893,7 +2094,9 @@ class BasePlugin:
             else:
                 iStatus = getStatus(Data)
                 sError, sErrorDescription, sErrorUri = getError(Data)
-            if sError.casefold() == "invalid_token" and (not self.bRefreshToken):
+            if self.bConsoApi and self.consoApiHandleStatus(False, iStatus, Data):
+                pass
+            elif sError.casefold() == "invalid_token" and (not self.bRefreshToken):
                 self.sConnectionStep = "parseaccesstoken"
                 self.refreshToken()
             elif iStatus == 403:
@@ -1927,8 +2130,8 @@ class BasePlugin:
 
         # first step to grab data
         if self.sConnectionStep == "start":
-            if self.iAlternateAddress :
-                self.lUsagePointIndex = self.lFalseCustomer
+            if self.bConsoApi:
+                self.lUsagePointIndex = list(self.lConsoApiPrm)
             else:
                 self.lUsagePointIndex = self.getConfigItem("usage_points_id", [])
             if (len(self.lUsagePointIndex) > 0):
@@ -1943,7 +2146,8 @@ class BasePlugin:
 
         # if we didn't grab production data, do it
         if self.sConnectionStep == "prod":
-            if (not self.bProdMode) and API_ENDPOINT_DATA_PRODUCTION_LOAD_CURVE:
+            # Pas de production en mode Conso API (Q3)
+            if (not self.bProdMode) and API_ENDPOINT_DATA_PRODUCTION_LOAD_CURVE and (not self.bConsoApi):
                 self.bProdMode = True
                 self.sConnectionStep = "next"
             else:
@@ -1989,7 +2193,9 @@ class BasePlugin:
         if self.sConnectionStep == "done":
             if self.bHasAFail:
                 self.bGlobalHasAFail = True
-            if self.bGlobalHasAFail:
+            if self.bConsoApi:
+                self.consoApiScheduleNext()
+            elif self.bGlobalHasAFail:
                 self.setNextConnection(False)
             self.saveCache()
             self.savePreviousSuccessfulConnectionDate(self.bGlobalHasAFail)
@@ -2036,29 +2242,7 @@ class BasePlugin:
         if self.iDebugLevel == 4:
             self.resetCache()            
 
-        if self.iDebugLevel >= 10:
-            self.iAlternateAddress = 1
-            if self.iDebugLevel == 10:
-                self.lFalseCustomer =["22516914714270"]
-            elif self.iDebugLevel == 11:
-                self.lFalseCustomer = ["11453290002823"]
-            elif self.iDebugLevel == 12:
-                self.lFalseCustomer = ["32320647321714"]
-            elif self.iDebugLevel == 13:
-                self.lFalseCustomer = ["12345678901234","10284856584123"]
-            elif self.iDebugLevel == 14:
-                self.lFalseCustomer = ["42900589957123"]
-            elif self.iDebugLevel == 15:
-                self.lFalseCustomer = ["24880057139941"]
-            elif self.iDebugLevel == 16:
-                self.lFalseCustomer = ["12655648759651"]
-            elif self.iDebugLevel == 17:
-                self.lFalseCustomer = ["64975835695673","63695879465986","22315546958763"]
-            elif self.iDebugLevel == 18:
-                self.lFalseCustomer = ["26584978546985"]
-        else:
-            self.iAlternateAddress = 0
-            self.lFalseCustomer = []
+        self.iAlternateAddress = 0
 
         self.myDebug("onStart called")
 
@@ -2089,9 +2273,27 @@ class BasePlugin:
                 self.fDebug.flush()
             return
 
-        # Even if not used, Username and Password may still be in database because of previous versions. We don't want them, as it triggers an unwanted HTTP basic autorization header in old Domoticz Python Framework
+        # Source des données (v3.0.0) : Conso API par défaut, Legacy (proxy API Enedis v5) en repli
+        sSource = str(Parameters.get("Address", "") or SOURCE_CONSOAPI).strip().casefold()
+        sConsoApiPrm = str(Parameters.get("Username", "") or "")
+        sConsoApiToken = str(Parameters.get("Password", "") or "").strip()
+        registerSecret(sConsoApiToken)
+        bConsoApi = (sSource not in SOURCE_LEGACY_ALIASES)
+        lConsoApiPrm = [sPrm.strip() for sPrm in sConsoApiPrm.split(",") if sPrm.strip()]
+
+        # Username and Password must not stay in Parameters: it triggers an unwanted HTTP basic autorization header in old Domoticz Python Framework
         Parameters.pop("Username", None)
         Parameters.pop("Password", None)
+
+        if bConsoApi:
+            if not sConsoApiToken:
+                self.myError("Source Conso API : le jeton (paramètre Password du matériel) est vide. Obtenez-le sur https://conso.boris.sh puis renseignez-le. Aucune requête ne sera faite")
+                self.isStarted = False
+                return
+            if (not lConsoApiPrm) or any(not PRM_PATTERN.match(sPrm) for sPrm in lConsoApiPrm):
+                self.myError("Source Conso API : le paramètre PRM (Username du matériel) doit contenir un ou plusieurs numéros de 14 chiffres séparés par des virgules. Aucune requête ne sera faite")
+                self.isStarted = False
+                return
 
         self.iHistoryDaysForHoursView = Parameters["Mode1"]
         self.iHistoryDaysForDaysView = Parameters["Mode2"]
@@ -2172,6 +2374,19 @@ class BasePlugin:
         # most init
         self.__init__()
         self.clearData()
+
+        self.bConsoApi = bConsoApi
+        if self.bConsoApi:
+            self.iAlternateAddress = CONSOAPI_ADDRESS_INDEX
+            self.sConsoApiToken = sConsoApiToken
+            self.lConsoApiPrm = lConsoApiPrm
+            self.iPeakBatchDays = CONSOAPI_PEAK_BATCH_DAYS
+            self.myLog("Source des données : Conso API (API Enedis V2), " + str(len(self.lConsoApiPrm)) + " point(s) de livraison, au plus " + str(CONSOAPI_MAX_REQUESTS_PER_DAY) + " requêtes par jour et par point")
+        else:
+            self.sConsoApiToken = ""
+            self.lConsoApiPrm = []
+            self.iPeakBatchDays = DEFAULT_PEAK_BATCH_DAYS
+            self.myLog("Source des données : Legacy (proxy API Enedis v5)")
         
         # useful only if we differentiate peak hours in cache
         ## do not load cache if off peak hours changed
@@ -2201,7 +2416,13 @@ class BasePlugin:
         dtNow = datetime.now()
         self.dtNextRefresh = setRefreshTime(dtNow)
         self.dtGlobalTimeout = setTimeout(dtNow)
-        self.setNextConnectionForLater(0)
+        dtLastSuccess = datetime.fromtimestamp(self.getConfigItem("previous_successful_connection_date", datetime(2000, 1, 1)))
+        if self.bConsoApi and (dtLastSuccess.date() == dtNow.date()):
+            # Conso API : pas de resynchronisation au redémarrage si le cycle du jour a réussi
+            self.setNextConnection(True)
+            self.myStatus("Cycle Conso API du jour déjà réussi, prochaine connexion : " + datetimeToSQLDateTimeString(self.dateNextConnection))
+        else:
+            self.setNextConnectionForLater(0)
 
         # Now we can enable the plugin
         self.isStarted = True
@@ -2494,6 +2715,33 @@ def dictToQuotedString(dParams):
     return result
 
 
+# Adaptateur Conso API V2 -> forme interne v5 lue par exploreDataHours() / exploreDataPeaks() (plan 011, T1.3)
+# V2 : {"idPrm", "grandeur": [{"grandeurMetier": "CONS", "unite", "points": [{"v", "d", ...}]}]}
+# Interne : {"meter_reading": {"usage_point_id", "interval_reading": [{"value", "date"}]}}
+# Horodatage fin d'intervalle et heure locale, comme v5 ; le pas de 15 min est absorbé par la moyenne horaire.
+# Toute autre forme est renvoyée inchangée (réponses Legacy, erreurs).
+def consoApiV2ToInternal(dJson):
+    if not isinstance(dJson, dict) or ("grandeur" not in dJson) or ("meter_reading" in dJson):
+        return dJson
+    lGrandeurs = dJson.get("grandeur")
+    if not isinstance(lGrandeurs, list):
+        return {}
+    dGrandeur = None
+    for dItem in lGrandeurs:
+        if isinstance(dItem, dict) and (str(dItem.get("grandeurMetier", "CONS")).upper() == "CONS"):
+            dGrandeur = dItem
+            break
+    lReadings = []
+    if dGrandeur and isinstance(dGrandeur.get("points"), list):
+        for dPoint in dGrandeur["points"]:
+            if isinstance(dPoint, dict) and ("v" in dPoint) and ("d" in dPoint):
+                lReadings.append({"value": dPoint["v"], "date": dPoint["d"]})
+    dMeterReading = {"interval_reading": lReadings}
+    if "idPrm" in dJson:
+        dMeterReading["usage_point_id"] = dJson["idPrm"]
+    return {"meter_reading": dMeterReading}
+
+
 # Grab error inside received JSON
 def getError(Data):
     sError = ""
@@ -2505,11 +2753,18 @@ def getError(Data):
         except ValueError:
             pass
         else:
-            if dJson:
+            if dJson and isinstance(dJson, dict):
                 if "error" in dJson:
-                    sError = str(dJson["error"])
+                    if isinstance(dJson["error"], dict):
+                        # Conso API : {"status", "message", "error": {"error": "ADAM-...", "error_description": "..."}}
+                        sError = str(dJson["error"].get("error", "") or dJson["error"].get("name", ""))
+                        sErrorDescription = str(dJson["error"].get("error_description", ""))
+                    else:
+                        sError = str(dJson["error"])
                 if "error_description" in dJson:
                     sErrorDescription = str(dJson["error_description"])
+                if (not sErrorDescription) and ("status" in dJson) and isinstance(dJson.get("message"), str):
+                    sErrorDescription = dJson["message"]
                 if "error_uri" in dJson:
                     sErrorUri = str(dJson["error_uri"])
     if not sError:

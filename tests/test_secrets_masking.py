@@ -157,3 +157,46 @@ class TestNonRegressionEnClair:
         texte = captured(plugin)
         for attendu in ("Verb", "GET", "/data/proxy/x", sentinels.PRM, "Host", "exemple.invalide"):
             assert attendu in texte, "%r a disparu des sorties" % attendu
+
+
+class TestJetonConsoApi:
+    """Plan 011 — T1.4 / T2.3 : le jeton Conso API n'apparaît dans aucune sortie, même en debug avancé."""
+
+    @pytest.fixture
+    def cycle(self, plugin_module, domoticz, monkeypatch):
+        from consoapi_helpers import TOKEN, freeze, start_consoapi
+        freeze(plugin_module, monkeypatch, 2026, 11, 26, 8, 34, 45)
+        plugin = start_consoapi(plugin_module, Mode3="2")
+        assert plugin.fDebug is not None  # fichier /tmp/DomoticzLinky_*.log
+        return plugin, TOKEN
+
+    @staticmethod
+    def _all_outputs(plugin, domoticz):
+        plugin.fDebug.flush()
+        with open(plugin.fDebug.name, encoding="utf-8") as oFile:
+            sFile = oFile.read()
+        return "\n".join(sum(domoticz.logs.values(), [])) + "\n" + sFile
+
+    def test_cycle_nominal_debug_avance(self, cycle, domoticz):
+        from consoapi_helpers import run_cycle
+        plugin, token = cycle
+        sent = run_cycle(plugin)
+        assert sent[0]["Headers"]["Authorization"] == "Bearer " + token  # le jeton part bien dans la requête
+        sOut = self._all_outputs(plugin, domoticz)
+        assert "Authorization" in sOut  # l'en-tête est bien journalisé en debug...
+        assert_no_leak(sOut, token, token.split(".")[1])  # ...mais masqué
+
+    def test_jeton_renvoye_dans_une_reponse(self, cycle, domoticz):
+        from consoapi_helpers import run_cycle
+        plugin, token = cycle
+        body = ('{"status":401,"message":"jeton ' + token + ' refusé"}').encode()
+        run_cycle(plugin, lambda r: {"Status": "401", "Data": body, "Headers": {"X-Echo": token}})
+        assert_no_leak(self._all_outputs(plugin, domoticz), token)
+
+    def test_masquage_jeton_sans_schema(self, plugin_module):
+        from consoapi_helpers import TOKEN
+        plugin_module.registerSecret(TOKEN)
+        assert TOKEN not in plugin_module.maskSecrets("token=" + TOKEN + " fin")
+
+    def test_cle_password_masquee(self, plugin_module):
+        assert plugin_module.maskValue("Password", "secret-quelconque") == plugin_module.MASK

@@ -3,7 +3,8 @@
 - **Statut de maintenance** : fork maintenu par vzwingma ; upstream `guillaumezin/DomoticzLinky` non maintenu (l'auteur n'utilise plus Domoticz).
 - **Usage** : ce plugin est destiné à être embarqué dans l'image Docker Domoticz du projet [vzwingma/domotique](https://github.com/vzwingma/domotique). La CI de ce projet récupère **ce fork**, épinglé par SHA de commit et tag (mises à jour par PR Renovate, sans automerge) ; `domotique` épingle la **v2.7.0** (SHA `a7b2320`) depuis le 2026-11-25 ; voir [docs/ARCHITECTURE.md](https://github.com/vzwingma/domotique/blob/master/docs/ARCHITECTURE.md) (§ 5.4) et l'[ADR 007](https://github.com/vzwingma/domotique/blob/master/docs/adr/007-plugins-domoticz-provenance-epinglee.md).
 - **Notes techniques** : rétroconception du code (analyse initiale v2.6.1, commit `1ef6adf`, annotée v2.7.0) — paramètres, machine à états, authentification, devices, persistance, sécurité, dette technique : [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md).
-- **Historique** : [CHANGELOG.md](CHANGELOG.md) (version courante : **2.7.0**).
+- **Source des données (v3.0.0)** : par défaut [Conso API](https://conso.boris.sh) (API Enedis « Mesure synchrone V2 », jeton personnel) ; l'ancien proxy (API Enedis v5) reste disponible sous le nom **Legacy**. Voir [Source des données](#source-des-données-v300) et [Migration depuis la version 2.x](#migration-depuis-la-version-2x).
+- **Historique** : [CHANGELOG.md](CHANGELOG.md) (version courante : **3.0.0**).
 - **Tests et CI** : le dossier `tests/` contient une suite `pytest` (faux module `Domoticz`, aucun Domoticz requis) ; `ruff.toml` configure un lint minimal (erreurs de syntaxe et noms non définis). La CI GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) exécute `py_compile`, `ruff` et `pytest` sur Python 3.11 et 3.13 (la production utilise Python 3.13.5). En local :
 
 ```
@@ -13,7 +14,7 @@ python -m ruff check plugin.py tests
 python -m pytest -q
 ```
 
-*EN: this is vzwingma's maintained fork; the upstream `guillaumezin/DomoticzLinky` is no longer maintained (its author no longer uses Domoticz). Technical reverse-engineering notes (in French) are in [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md), the release history is in [CHANGELOG.md](CHANGELOG.md), and a French section "Paramètres du plugin" describes the `Mode1`-`Mode6` settings (including a warning about the advanced debug modes). The rest of the user guide below is unchanged.*
+*EN: this is vzwingma's maintained fork; the upstream `guillaumezin/DomoticzLinky` is no longer maintained (its author no longer uses Domoticz). Since version 3.0.0 the default data source is [Conso API](https://conso.boris.sh) (Enedis "Mesure synchrone V2" API, personal Bearer token, at most 3 requests per day and per meter); the former proxy (Enedis API v5) is kept as the "Legacy" source. Setup is described in French in "Source des données (v3.0.0)" below. Technical reverse-engineering notes (in French) are in [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md), the release history is in [CHANGELOG.md](CHANGELOG.md), and a French section "Paramètres du plugin" describes the settings (including a warning about the advanced debug modes). The English user guide below describes the Legacy source only.*
 
 # Participer aux frais d'hébergement et au développement du plugin
 Le proxy permettant de gérer l'authentification auprès d'Enedis pour que le plugin Linky puisse récupérer les consommations / productions d'électricité, est hébergé sur un serveur dédié. Si vous le souhaitez, vous pouvez participer aux frais d'hébergement en cliquant sur le bouton ci-dessous.
@@ -109,7 +110,55 @@ Dans ce même menu, en bas, vérifiez que "P1 Smart Meter" est bien de type "Ave
 
 ![Réglage des décimales](assets/decimalsettingfr.jpg)
 
-### Obtention du consentement
+### Source des données (v3.0.0)
+
+Le paramètre **« Source des données »** choisit d'où viennent les mesures :
+
+| Choix | Service | Authentification | Remarques |
+|---|---|---|---|
+| **Conso API** (défaut) | [conso.boris.sh](https://conso.boris.sh) — API Enedis « Mesure synchrone V2 » | jeton personnel saisi dans le matériel | source recommandée ; pas de production |
+| **Legacy** | ancien proxy d'authentification (API Enedis v5, en fin de vie) | consentement dans le log Domoticz (voir [Obtention du consentement](#obtention-du-consentement-source-legacy)) | conservée en repli jusqu'à la coupure de l'API v5 |
+
+#### Configurer Conso API
+
+1. Rendez-vous sur [conso.boris.sh](https://conso.boris.sh) et suivez la procédure de **consentement** Enedis (connexion à votre espace client Enedis). Vous obtenez un **jeton** (une longue chaîne `xxx.yyy.zzz`), valable **3 ans**.
+2. Notez votre **PRM** (numéro de point de livraison, 14 chiffres, visible sur votre espace client Enedis ou sur le compteur).
+3. Dans Configuration / Matériel, sur le matériel Linky :
+   - « Source des données » = **Conso API** ;
+   - « Conso API : PRM » = votre PRM (plusieurs PRM : séparez-les par des virgules) ;
+   - « Conso API : jeton » = le jeton obtenu à l'étape 1 (champ masqué) ;
+   - cliquez sur **Modifier**.
+4. Au démarrage, le log indique « Source des données : Conso API ». Si le jeton est vide ou si un PRM ne fait pas 14 chiffres, le plugin s'arrête avec un message d'erreur et **n'envoie aucune requête**.
+
+**Révocation** : vous pouvez retirer l'accès à tout moment depuis votre espace client Enedis (rubrique de gestion du partage de vos données). Le plugin affichera alors « Jeton Conso API invalide ou expiré » ; refaites l'étape 1 et remplacez le jeton.
+
+**Le jeton est un secret** : il est stocké par Domoticz dans sa base (`domoticz.db`, non chiffrée) et masqué (`***`) dans les journaux du plugin. Ne le partagez pas.
+
+#### Quota d'appels (Conso API)
+
+Conso API est un service gratuit dont le quota Enedis est partagé par tous ses utilisateurs ; un usage abusif entraîne un **blocage de l'adresse IP pendant plusieurs mois, sans recours** ([règles d'usage](https://conso.boris.sh/blocage-ip)). Le plugin applique donc :
+
+- **au plus 3 requêtes par jour et par PRM**, retries compris (compteur conservé même après un redémarrage de Domoticz) ;
+- un cycle par jour, vers 8 h (minutes aléatoires) : **2 requêtes** (courbe de charge des 7 derniers jours + puissance maximale) ;
+- en cas d'erreur temporaire (service indisponible, délai dépassé) ou si les données de la veille ne sont pas encore publiées : **une seule** nouvelle tentative 3 h plus tard (avant 22 h), sinon le lendemain ;
+- jeton refusé (401/403) ou requête invalide (400) : pas de nouvelle tentative avant le lendemain ;
+- historique long (« Nombre de jours à récupérer pour les autres vues » > 7) : récupéré **progressivement, un lot par jour** ; un trou dans l'historique se comble donc en plusieurs jours ;
+- aucune requête au redémarrage si le cycle du jour a déjà réussi ; jamais de requêtes en parallèle.
+
+Les données d'un jour J sont publiées par Enedis vers 8 h à J+1 (parfois 1 à 2 h plus tard).
+
+#### Migration depuis la version 2.x
+
+La version 3.0.0 est **incompatible** : après la mise à jour, le plugin démarre en mode Conso API et s'arrête avec « le jeton … est vide » tant que le matériel n'est pas reconfiguré.
+
+1. Obtenez le jeton Conso API (voir ci-dessus).
+2. Ouvrez le matériel Linky (Configuration / Matériel), renseignez « Source des données » = Conso API, le PRM et le jeton, vérifiez que « Debug » = Non, puis **Modifier**.
+3. Les devices `Linky <PRM>` existants sont réutilisés (même `idx`, historique conservé). Il n'y a **pas de rattrapage** des jours manqués avant la migration au-delà de l'historique configuré.
+4. Pour revenir à l'ancien fonctionnement : « Source des données » = **Legacy** (consentement de l'ancien proxy, voir ci-dessous).
+
+### Obtention du consentement (source Legacy)
+Cette étape ne concerne que la source **Legacy** ; avec Conso API, le consentement se fait sur conso.boris.sh (voir ci-dessus).
+
 Commencez par surveiller l'onglet "Erreur" dans Configuration / Log. Aux premières connexions, le plugin doit vous donner l'adresse Web https://enedis.domoticz.russandol.pro/device à consulter et un code à y copier/coller pour obtenir le consentement du partage de données d'Enedis vers le plugin.
 
 ![Adresse pour le consentement](assets/getlinkfr.jpg)
@@ -196,9 +245,12 @@ Cette section résume les paramètres affichés dans Configuration / Matériel p
 
 | Paramètre | Libellé affiché dans Domoticz | Rôle | Valeurs | Défaut |
 |---|---|---|---|---|
+| `Address` | « Source des données » | Source des mesures (voir [Source des données](#source-des-données-v300)) | « Conso API » (`consoapi`) ou « Legacy » (`legacy`) ; vide = Conso API | Conso API |
+| `Username` | « Conso API : PRM (14 chiffres, plusieurs séparés par des virgules) » | PRM interrogé(s) en mode Conso API (ignoré en Legacy, qui reçoit la liste du proxy) | un ou plusieurs numéros de 14 chiffres | vide |
+| `Password` | « Conso API : jeton (Bearer) » | Jeton Conso API (champ masqué, ignoré en Legacy) | chaîne fournie par conso.boris.sh | vide |
 | `Mode1` | « Nombre de jours à récupérer pour la vue par heures (0 min, pour désactiver la récupération par heures, 7 max) » | Profondeur de l'historique de la vue par heures (voir [Nombre de jours à récupérer](#nombre-de-jours-à-récupérer)) | entier de 0 à 7 ; `0` désactive la vue par heures ; valeur invalide : 7 | 7 |
 | `Mode2` | « Nombre de jours à récupérer pour les autres vues (730 max) » | Profondeur de l'historique des vues jour / semaine / mois / année | entier de 2 à 730 ; relevé automatiquement selon l'affichage secondaire (`Mode6`) : semaine en cours 7, semaine dernière 14, mois en cours 32, mois dernier 63, année en cours 366 ; au-delà de 35 jours, la récupération complète n'a lieu que de temps en temps | 7 |
-| `Mode3` | « Debug » | Debug et maintenance (voir le tableau ci-dessous) | Non, Simple, Avancé, Reset consentement, Reset cache, Faux client 0 à 9 | Non |
+| `Mode3` | « Debug » | Debug et maintenance (voir le tableau ci-dessous) | Non, Simple, Avancé, effacer le consentement Legacy, vider le cache | Non |
 | `Mode4` | « Heures creuses (vide pour désactiver, cf. readme pour la syntaxe) » | Plages d'heures creuses (voir [Heures creuses](#heures-creuses)) | texte, syntaxe décrite dans [Heures creuses](#heures-creuses) ; vide = désactivé | vide |
 | `Mode5` | « Consommation à montrer sur le tableau de bord (affichage principal) » | Pic de consommation affiché sur la première ligne du dispositif (voir [Affichage](#affichage)) | pic de consommation de la journée dernière, de la semaine en cours / dernière, du mois en cours / dernier, de l'année en cours | aucune valeur par défaut dans la liste ; sans choix, le plugin utilise « Pic consommation journée dernière » |
 | `Mode6` | « Consommation à montrer sur le tableau de bord (affichage secondaire) » | Énergie affichée sur les lignes suivantes du dispositif | consommation / production, ou horaire maximale, ou horaire moyenne, de la journée dernière, de la semaine en cours / dernière, du mois en cours | « Consommation / production journée dernière » |
@@ -209,21 +261,29 @@ Cette section résume les paramètres affichés dans Configuration / Matériel p
 | Choix affiché | Valeur | Effet |
 |---|---|---|
 | Non | 0 | Aucun debug. |
-| Simple | 1 | Crée un fichier de debug dans `/tmp` (voir ci-dessous) ; les messages de debug ne vont que dans ce fichier, pas dans le log Domoticz. |
-| Avancé | 2 | Fichier de debug **et** messages de debug recopiés dans le log Domoticz, **avec le debug complet du framework Domoticz** (voir l'avertissement ci-dessous). |
-| Reset consentement | 3 | À **chaque démarrage** tant que ce choix est sélectionné, le plugin efface ses jetons : un nouveau consentement est demandé (voir [Obtention du consentement](#obtention-du-consentement)). Active aussi le debug avancé. |
-| Reset cache | 4 | À **chaque démarrage** tant que ce choix est sélectionné, le plugin vide son cache : les données sont redemandées à Enedis à la prochaine collecte (utile pour appliquer les heures creuses aux anciennes données). Active aussi le debug avancé. |
-| Faux client 0 à 9 | 10 à 19 | Mode de test : le plugin utilise le serveur de test (sandbox) avec des **faux points de livraison**, sans consentement ; les données affichées sont fictives, ne l'utilisez pas sur une installation réelle. Active aussi le debug avancé. « Faux client 9 » ne définit aucun faux point de livraison et n'est pas utilisable. |
+| Simple (fichier de log dans /tmp) | 1 | Crée un fichier de debug dans `/tmp` (voir ci-dessous) ; les messages de debug ne vont que dans ce fichier, pas dans le log Domoticz. |
+| Avancé (fichier de log + debug Domoticz) | 2 | Fichier de debug **et** messages de debug recopiés dans le log Domoticz, **avec le debug complet du framework Domoticz** (voir l'avertissement ci-dessous). |
+| Legacy : effacer consentement et jetons, puis remettre Non | 3 | À **chaque démarrage** tant que ce choix est sélectionné, le plugin efface les jetons de la source Legacy : un nouveau consentement est demandé (voir [Obtention du consentement](#obtention-du-consentement-source-legacy)). Sans effet sur le jeton Conso API (paramètre du matériel). Active aussi le debug avancé. |
+| Vider le cache des données, puis remettre Non | 4 | À **chaque démarrage** tant que ce choix est sélectionné, le plugin vide son cache : les données sont redemandées à Enedis à la prochaine collecte (utile pour appliquer les heures creuses aux anciennes données). Active aussi le debug avancé. |
 
-Après un « Reset consentement » ou un « Reset cache », remettez « Debug » sur sa valeur précédente (en général « Non ») et cliquez sur « Modifier », sinon l'opération se répète à chaque redémarrage de Domoticz.
+Les anciennes options « Faux client 0 à 9 » (serveur de test) ont été supprimées en 3.0.0. Après un effacement du consentement ou du cache, remettez « Debug » sur sa valeur précédente (en général « Non ») et cliquez sur « Modifier », sinon l'opération se répète à chaque redémarrage de Domoticz.
 
-> ⚠️ **Debug = fichiers `/tmp`** : dès « Simple », le plugin écrit un fichier `/tmp/DomoticzLinky_<date>_<aléa>.log` (dans le conteneur si Domoticz tourne sous Docker). Son chemin est indiqué dans le log Domoticz au démarrage. Il est fermé à l'arrêt du plugin mais **n'est jamais supprimé automatiquement** : supprimez-le vous-même quand vous n'en avez plus besoin. Depuis la version 2.7.0, les jetons, les en-têtes `Authorization` et les cookies y sont masqués (`***`) ; en revanche, votre numéro de point de livraison (PRM) et le code de consentement y apparaissent en clair : relisez le fichier avant de le transmettre à quelqu'un.
+> ⚠️ **Debug = fichiers `/tmp`** : dès « Simple », le plugin écrit un fichier `/tmp/DomoticzLinky_<date>_<aléa>.log` (dans le conteneur si Domoticz tourne sous Docker). Son chemin est indiqué dans le log Domoticz au démarrage. Il est fermé à l'arrêt du plugin mais **n'est jamais supprimé automatiquement** : supprimez-le vous-même quand vous n'en avez plus besoin. Depuis la version 2.7.0, les jetons, les en-têtes `Authorization` et les cookies y sont masqués (`***`), ainsi que le jeton Conso API depuis la 3.0.0 ; en revanche, votre numéro de point de livraison (PRM) et le code de consentement y apparaissent en clair : relisez le fichier avant de le transmettre à quelqu'un.
 
-> ⚠️ **Avertissement — debug avancé (connu, non corrigé)** : tous les choix de « Debug » **à partir d'« Avancé »** (Avancé, Reset consentement, Reset cache, Faux clients) activent le **debug complet du framework Domoticz**. Ce debug n'est pas filtré par le plugin et peut écrire **les jetons en clair dans le log Domoticz** (en-tête `Bearer`, `refresh_token`, réponse d'obtention des jetons). N'activez ces choix que **ponctuellement**, puis remettez « Debug » sur « Non » et **purgez le log Domoticz** (Configuration / Log, ou le fichier de log de Domoticz). Le choix « Simple » n'est pas concerné. Détail technique : [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md#3-paramètres-du-plugin) (§ 3, effets de `Mode3`) et § 13 (sécurité, risque S9 / D17).
+> ⚠️ **Avertissement — debug avancé (connu, non corrigé)** : tous les choix de « Debug » **à partir d'« Avancé »** (Avancé, effacement du consentement, vidage du cache) activent le **debug complet du framework Domoticz**. Ce debug n'est pas filtré par le plugin et peut écrire **les jetons en clair dans le log Domoticz** (en-tête `Bearer` — y compris le jeton Conso API —, `refresh_token`, réponse d'obtention des jetons). N'activez ces choix que **ponctuellement**, puis remettez « Debug » sur « Non » et **purgez le log Domoticz** (Configuration / Log, ou le fichier de log de Domoticz). Le choix « Simple » n'est pas concerné. Détail technique : [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md#3-paramètres-du-plugin) (§ 3, effets de `Mode3`) et § 13 (sécurité, risque S9 / D17).
 
 ## Dépannage
 ### Etat des services
-Commencez par consulter l'[état des services Enedis (Data Connect / API en production / Authorize et Metering Data v5)](https://datahub-enedis.fr/services-api/etat-des-services/). En cas d'erreur, le plugin ne pourra pas fonctionner non plus, il faudra attendre le rétablissement des services.
+Commencez par consulter l'[état des services Enedis](https://datahub-enedis.fr/services-api/etat-des-services/). En cas d'erreur, le plugin ne pourra pas fonctionner non plus, il faudra attendre le rétablissement des services.
+
+### Conso API : « Jeton Conso API invalide ou expiré »
+Le jeton est erroné, a expiré (3 ans) ou a été révoqué dans l'espace client Enedis, ou il ne donne pas accès à ce PRM. Vérifiez le PRM, refaites le consentement sur [conso.boris.sh](https://conso.boris.sh) et remplacez le jeton dans le matériel. Le plugin ne réessaie pas avant le lendemain.
+
+### Conso API : « Budget Conso API du jour atteint »
+Les 3 requêtes du jour pour ce PRM ont été utilisées (erreurs répétées ou historique en cours de récupération). Le plugin reprend automatiquement le lendemain ; ne redémarrez pas le matériel en boucle, cela ne débloque rien. Si cela se répète, mettez « Debug » sur « Simple » un jour pour comprendre la cause.
+
+### Conso API : « … nouvelle tentative plus tard »
+Service Conso API ou Enedis indisponible (429, 5xx) ou délai de réponse dépassé : une seule nouvelle tentative a lieu 3 h plus tard, sinon le lendemain.
 
 ### Les courbes affichent les données en jour de la semaine, du mois et de l'année mais pas les données en heures
 Vérifiez que vous avez bien suivi toutes les étapes du menu [Configuration](#configuration).
@@ -234,13 +294,13 @@ Cette erreur est liée à des données manquantes pour satisfaire les configurat
 ### Erreur "Serveurs inaccessibles à cette heure"
 Les serveurs d'Enedis sont inaccessibles la nuit, le plugin va de lui-même ré-essayer de récupérer vos données le lendemain matin après 8h.
 
-### Erreur "Trop d'échecs de communication, le plugin réessaiera plus tard"
+### Erreur "Trop d'échecs de communication, le plugin réessaiera plus tard" (source Legacy)
 Cela traduit en général un problème de quota : Enedis offre au plugin un certains nombre d'appels possibles vers son site pour l'ensemble des utilisateurs du plugin. Le plugin va de lui-même ré-essayer de récupérer vos données l'heure suivante. Si vous rencontrez souvent cette erreur, il vaut mieux diminuer le paramètre "Nombre de jours à récupérer pour les autres vues" à 7 pour diminuer le nombre d'appels.
 
 Dans certains cas, il s'agit d'un problème avec le jeton de consentement. Si vous mettez "Debug" à "Avancé", puis faites "Modifier", le log de Domoticz va vous donner un chemin vers un fichier de debug. En ouvrant ce fichier avec un éditeur de texte, si vous constatez de nombreuses "Technical error. Please try later.", vous pouvez essayer de faire un reset consentement comme décrit ci-dessous. N'oubliez pas de remettre ensuite "Debug" sur son ancienne valeur et de faire "Modifier".
 
-### Problèmes relatifs à l'obtention du consentement
-Si vous avez des problèmes récurrents avec l'obtention du consentement, vous pouvez relancer l'étape en passant le paramètre "Debug" à "Reset consentement" et cliquez sur "Modifier", puis remettez "Debug" à son ancienne position et refaites "Modifier". Ensuite retournez lire le chapitre [Obtention du consentement](#obtention-du-consentement).
+### Problèmes relatifs à l'obtention du consentement (source Legacy)
+Si vous avez des problèmes récurrents avec l'obtention du consentement, vous pouvez relancer l'étape en passant le paramètre "Debug" à "Legacy : effacer consentement et jetons, puis remettre Non" et cliquez sur "Modifier", puis remettez "Debug" à son ancienne position et refaites "Modifier". Ensuite retournez lire le chapitre [Obtention du consentement](#obtention-du-consentement-source-legacy).
 
 ### Les problèmes persistent
 Passez le paramètre "Debug" à "Simple" et cliquez sur "Modifier". Observez le log de Domoticz, il vous indiquera le chemin vers un fichier log spécifique au plugin, par exemple /tmp/DomoticzLinky_2021_01_17_15_04_19_ukzvik3k.log. Ouvrez ce fichier avec un éditeur de texte pour voir ce qui se trame. Si vous n'y comprenez rien, envoyez le fichier à l'adresse e-mail qui s'affiche sur https://github.com/guillaumezin (pour que l'adresse soit visible, il faut que vous ayez un compte github et que vous soyez connecté) et en parallèle ouvrez un ticket de support sur https://github.com/guillaumezin/DomoticzLinky/issues. N'essayez pas d'attachez le fichier log au ticket de support, ça ne passera pas.
@@ -460,7 +520,7 @@ This generally reflects a quota problem: Enedis gives the plugin a certain numbe
 In some cases, it is a problem with the consent token. If you set "Debug" to "Avancé", then do "Modify", the Domoticz log will give you a path to a debug file. By opening this file with a text editor, if you see many "Technical error. Please try later.", you can try to reset consent as described below. Don't forget to then put "Debug" back to its old value and do "Modify".
 
 ### Consent Obtaining Issues
-If you have recurring problems with obtaining consent, you can restart the step by changing the "Debug" parameter to "Reset consentement" and click on "Modify", then put "Debug" back to its old position and redo "Modify". Then go back to read the chapter [Give consent](#give-consent).
+If you have recurring problems with obtaining consent, you can restart the step by changing the "Debug" parameter to "Legacy : effacer consentement et jetons, puis remettre Non" and click on "Modify", then put "Debug" back to its old position and redo "Modify". Then go back to read the chapter [Give consent](#give-consent).
 
 ### Problems persist
 Change the "Debug" parameter to "Simple" and click on "Modify". Observe the Domoticz log, it will show you the path to a plugin specific log file, for example /tmp/DomoticzLinky_2021_01_17_15_04_19_ukzvik3k.log. Open this file with a text editor to see what's going on. If you don't understand it, send the file to the email address that appears at https://github.com/guillaumezin (for the address to be visible, you must have a github account and you must be logged in) and at the same time open a support ticket on https://github.com/guillaumezin/DomoticzLinky/issues. Do not try to attach the log file to the support ticket, it will not work.

@@ -1,10 +1,11 @@
-# Rétroconception technique du plugin Domoticz « Linky » (`plugin.py` v2.6.1, annotée v2.7.0)
+# Rétroconception technique du plugin Domoticz « Linky » (`plugin.py` v2.6.1, annotée v2.7.0 et v3.0.0)
 
 > **Périmètre :** rétrodocumentation du code existant, rédigée **sans aucune modification de code** (plan d'action 009), puis **annotée pour la v2.7.0** (plan d'action 010 : correctifs S2/S3, tests, CI, provenance épinglée). Les § 1, 3 (effets de `Mode3`), 9.4, 11, 12, 13, 14 et 15 portent l'état **v2.7.0** ; les autres sections décrivent le comportement analysé à `1ef6adf`, inchangé en v2.7.0 sauf mention contraire.
-> **Source analysée :** `plugin.py` version **2.6.1**, dépôt `vzwingma/DomoticzLinky`, branche `master`, commit **`1ef6adf`** (`1ef6adfd0fe0e1f6c78575a9d6d0100523341bc5`). **Version courante : 2.7.0** (branche `fix/v2.7.0`, voir [`CHANGELOG.md`](../CHANGELOG.md)).
+> **Source analysée :** `plugin.py` version **2.6.1**, dépôt `vzwingma/DomoticzLinky`, branche `master`, commit **`1ef6adf`** (`1ef6adfd0fe0e1f6c78575a9d6d0100523341bc5`). **Version courante : 3.0.0** (voir [`CHANGELOG.md`](../CHANGELOG.md)).
 > **Convention de référence :** les affirmations renvoient à un **nom de fonction** (`fonction()` = méthode de `BasePlugin`, ou fonction de module) de `plugin.py` v2.6.1 @ `1ef6adf`. Les numéros de ligne (`l.`) sont **indicatifs** (complément seulement) et valent pour ce SHA.
 > **Langue :** français (décision du projet). Le guide utilisateur FR/EN reste dans [`readme.md`](../readme.md) et n'est pas dupliqué ici.
 > **Rédaction :** 2026-11-25 (plan d'action 009 du dépôt `vzwingma/domotique`).
+> **v3.0.0 (plan d'action 011, ADR 008 du dépôt `domotique`) :** nouvelle source de données **Conso API** (API Enedis « Mesure synchrone V2 »), source par défaut ; l'ancien proxy devient la source **Legacy**. Le fonctionnement propre à Conso API est décrit au **[§ 17](#17-source-conso-api-v300)** ; les § 2.2, 3, 6, 7, 10, 13 et 14 portent des renvois. Le bac à sable (`opensrcdev.alwaysdata.net`) et les « Faux clients » (`Mode3` 10 à 19) sont **supprimés** en v3.0.0 : les mentions ci-dessous les concernant décrivent l'état v2.x.
 
 ---
 
@@ -26,6 +27,7 @@
 14. [Dette technique et risques](#14-dette-technique-et-risques)
 15. [Intégration dans le projet `domotique`](#15-intégration-dans-le-projet-domotique)
 16. [Glossaire](#16-glossaire)
+17. [Source Conso API (v3.0.0)](#17-source-conso-api-v300)
 
 ---
 
@@ -34,7 +36,7 @@
 | Élément | Valeur | Source |
 |---|---|---|
 | Clé du plugin | `key="linky"`, nom `Linky` | bloc XML `<plugin>` en tête de `plugin.py` (l. 25) |
-| Version | `2.7.0` (analyse initiale : `2.6.1` @ `1ef6adf`, historique conservé) | bloc XML `<plugin>` ; envoyée aussi dans l'en-tête `User-Agent: DomoticzLinkyPlugin/<version>` (`initHeaders()`) |
+| Version | `3.0.0` (v2.7.0 : plan 010 ; analyse initiale : `2.6.1` @ `1ef6adf`, historique conservé) | bloc XML `<plugin>` ; envoyée aussi dans l'en-tête `User-Agent: DomoticzLinkyPlugin/<version>` (`initHeaders()`) |
 | Auteur déclaré | `vzwingma` en v2.7.0 (`Barberousse` en v2.6.1) ; copyrights historiques conservés dans l'en-tête : Baptiste Candellier 2016, Asdepique777 2017, epierre 2017, Barberousse 2018-2021, vzwingma 2026- | en-tête de licence + attribut `author` |
 | Licence du plugin | **AGPL-3.0** (en-tête de `plugin.py` + fichier `LICENSE`) | en-tête du fichier |
 | Code tiers embarqué | classe `JoursFeries` issue de `etalab/jours-feries-france`, licence **MIT** (copyright Etalab 2020, texte de licence reproduit en commentaire) | classe `JoursFeries` (l. 2534 et suivantes) |
@@ -65,6 +67,7 @@ Le plugin s'exécute dans le **framework de plugins Python** de Domoticz (module
 - Les données proviennent de l'API **Enedis Data Connect** (comptes **particuliers** uniquement, limite d'API rappelée dans le readme).
 - L'accès Enedis exige un consentement OAuth2 de l'utilisateur. Le plugin **n'appelle pas Enedis directement** : il passe par un **proxy tiers** (« Device Flow Proxy Server », hébergé par RUSSANDOL, cf. readme « Remerciements ») qui détient le contrat Enedis et relaie les requêtes d'authentification et de données (`LOGIN_BASE_URI`, `API_BASE_URI`, `API_ENDPOINT_DATA_URI`).
 - Deux couples d'adresses sont codés en dur (index `iAlternateAddress`) : `[0]` = **production** (`enedis.domoticz.russandol.pro`), `[1]` = **sandbox** (`opensrcdev.alwaysdata.net`, préfixe de chemin `/domoticzlinkyconnect`). Le mode sandbox n'est activé que par `Mode3` ≥ 10 ([§ 3](#3-paramètres-du-plugin)).
+- **v3.0.0** : ce proxy est appelé source **Legacy** (index `0`, seul couple d'authentification restant) ; l'index `1` désigne désormais **Conso API** (`conso.boris.sh`, [§ 17](#17-source-conso-api-v300)) et le bac à sable est supprimé. Un particulier ne pouvant pas contracter Data Connect, un intermédiaire reste nécessaire dans les deux cas.
 
 > Sources : constantes `CLIENT_ID`, `LOGIN_BASE_URI`, `API_BASE_URI`, `API_ENDPOINT_*` (l. 137-153) ; callbacks de module (l. 2360-2414).
 
@@ -83,7 +86,10 @@ Déclarés dans le bloc XML `<params>` (l. 26-112) et lus dans `onStart()`.
 | `Port` | **Ordre des index** | `0` = heures pleines (HP) puis HC ; `1` = HC puis HP | `0` | `bOffPeakFirst = (Port == "1")` ; inversion **à l'écriture** dans `addToDevice()` / `updateDevice()` (l'historique déjà écrit n'est pas modifié, cf. readme). Le champ `Port` est réutilisé pour stocker un choix d'index (ce n'est pas un port réseau). |
 | `Mode5` | **Affichage principal** du tableau de bord | `peak_day`, `peak_cweek`, `peak_lweek`, `peak_cmonth`, `peak_lmonth`, `peak_year` (pic de consommation) | aucun défaut XML ; repli code `peak_day` | Alimente les champs « CONS;PROD » de `sValue` (cf. [§ 8](#8-dispositifs-devices-domoticz)). Fixe la durée de récupération des pics : `_cweek` 7 j, `_lweek` 14 j, `_cmonth` 32 j, `_lmonth` 63 j, `_year` 366 j, sinon 1 j (`iHistoryDaysForPeakDaysView`). |
 | `Mode6` | **Affichage secondaire** du tableau de bord | `value_*` (somme), `max_*` (maximum horaire), `mean_*` (moyenne horaire) × `day`, `cweek`, `lweek`, `cmonth` (les variantes `lmonth`/`year` sont **commentées** dans le XML) | `value_day` | Alimente les compteurs U1/U2/R1/R2 de `sValue`. Repli code : `value_day`. |
-| `Username`, `Password` | **supprimés** | — | — | `Parameters.pop("Username"/"Password")` : évite un en-tête HTTP Basic indésirable avec d'anciennes bases. |
+| `Username`, `Password` | **supprimés** (v2.x) | — | — | `Parameters.pop("Username"/"Password")` : évite un en-tête HTTP Basic indésirable avec d'anciennes bases. |
+| `Address` *(v3.0.0)* | **Source des données** | `consoapi` (défaut, vide = `consoapi`) · `legacy` (`russandol` accepté) | `consoapi` | `bConsoApi` ; Conso API ⇒ `iAlternateAddress = 1`, lots de pics de 365 j ([§ 17](#17-source-conso-api-v300)) |
+| `Username` *(v3.0.0)* | **PRM** Conso API | un ou plusieurs numéros de 14 chiffres séparés par des virgules (`PRM_PATTERN`) | vide | lu **avant** le `pop()` historique ; invalide en Conso API ⇒ erreur, plugin non démarré, aucune requête |
+| `Password` *(v3.0.0)* | **Jeton** Conso API (`password="true"`) | chaîne Bearer | vide | lu avant le `pop()` ; `registerSecret()` (masquage) ; vide en Conso API ⇒ erreur, plugin non démarré |
 
 ### Effets de `Mode3`
 
@@ -94,8 +100,9 @@ Déclarés dans le bloc XML `<params>` (l. 26-112) et lus dans `onStart()`.
 | `2` | Idem + `Domoticz.Debugging(1)` (⚠️ log du framework Domoticz **non masqué**, voir D17 / [§ 13](#13-sécurité) S9) + messages de debug recopiés dans le log Domoticz (`myMessage()`). |
 | `3` | `resetTokens()` à **chaque démarrage** tant que la valeur reste à 3 → nouveau consentement requis. Active aussi le debug avancé (niveau > 1). |
 | `4` | `resetCache()` à chaque démarrage (vide `cache` et `cache_checksum`). Active aussi le debug avancé. |
-| `10` à `18` | **Sandbox** : `iAlternateAddress = 1`, liste `lFalseCustomer` prédéfinie (1 à 3 faux PRM selon la valeur) ; l'étape `idle` saute l'authentification. Debug avancé actif. |
-| `19` (« Faux client 9 ») | Active la sandbox **mais aucune liste n'est définie** (la chaîne `if/elif` s'arrête à 18) → `lFalseCustomer` reste vide → erreur « Erreur à la lecture des points de livraison » à l'étape `start`. |
+| *v3.0.0* | Libellés : « Simple (fichier de log dans /tmp) », « Avancé (fichier de log + debug Domoticz) », « Legacy : effacer consentement et jetons, puis remettre Non » (3), « Vider le cache des données, puis remettre Non » (4). **Valeurs 10 à 19 supprimées** (D13 clos). |
+| `10` à `18` (v2.x) | **Sandbox** : `iAlternateAddress = 1`, liste `lFalseCustomer` prédéfinie (1 à 3 faux PRM selon la valeur) ; l'étape `idle` saute l'authentification. Debug avancé actif. |
+| `19` (« Faux client 9 », v2.x) | Active la sandbox **mais aucune liste n'est définie** (la chaîne `if/elif` s'arrête à 18) → `lFalseCustomer` reste vide → erreur « Erreur à la lecture des points de livraison » à l'étape `start`. |
 
 > Sources : bloc XML `<params>` ; `onStart()` ; `parseHcParameter()` ; `resetTokens()` ; `resetCache()`.
 
@@ -261,6 +268,8 @@ sending --> parseaccesstoken : onMessage() : retour à l'étape émettrice\n(sCo
 
 ## 6. Authentification
 
+> **v3.0.0** : ce flux ne concerne que la source **Legacy**. En mode Conso API, l'étape `idle` passe directement à `start` : pas de Device Flow ni de `refreshToken()`, jeton Bearer fixe issu du paramètre `Password` ([§ 17](#17-source-conso-api-v300)).
+
 Flux **OAuth2 Device Flow** via le proxy ([§ 2.2](#22-enedis-data-connect-et-proxy-dauthentification)). Le `client_id` est **public** et codé en dur (deux valeurs : production `[0]`, sandbox `[1]`).
 
 1. **Demande de code** — `getDeviceCode()` : `POST <login>/device/code` avec `client_id`. En sandbox, chemins préfixés `/domoticzlinkyconnect`.
@@ -282,6 +291,8 @@ Flux **OAuth2 Device Flow** via le proxy ([§ 2.2](#22-enedis-data-connect-et-pr
 ## 7. Collecte et traitement des données
 
 ### 7.1 Endpoints appelés (via le proxy, préfixe `/data/proxy`)
+
+> **v3.0.0** : en mode Conso API, ces constantes internes sont traduites en types V2 (`CONSOAPI_TYPES`) et appelées sur `conso.boris.sh/api/<type>` ; la production n'est pas demandée ; la courbe arrive au pas de **15 min** ([§ 17](#17-source-conso-api-v300)).
 
 | Donnée | Endpoint (constante) | Usage |
 |---|---|---|
@@ -421,6 +432,8 @@ Si `Mode3` ≥ 1 : fichier **`/tmp/DomoticzLinky_<AAAA_MM_JJ_HH_MM_SS>_<aléa>.l
 
 ## 10. Planification et résilience
 
+> **v3.0.0** : le tableau ci-dessous décrit la source **Legacy**. En mode Conso API, la relance après échec, les renvois, le time-out et le traitement des 429/5xx sont remplacés par le **budget d'appels** du [§ 17.4](#174-budget-dappels-t15).
+
 | Mécanisme | Comportement | Fonction |
 |---|---|---|
 | **Fenêtre de connexion** | Connexions autorisées **entre 8 h et 22 h** (heure locale). Hors fenêtre : message « Serveurs inaccessibles à cette heure » ; prochaine connexion le lendemain (ou le jour même après 8 h) | `setNextConnection()`, `setNextConnectionForLater()` |
@@ -500,6 +513,8 @@ Les statuts ci-dessous valent pour la **v2.7.0** (le détail des constats reste 
 | S6 | **`client_id` public en dur** | Acceptable : identifiant public du flux Device Flow, pas un secret. `client_secret` n'apparaît nulle part dans `plugin.py` (flux avec `client_id` seul) ; il est néanmoins masqué par défense en profondeur. | `CLIENT_ID` | Sans objet (Info) |
 | S7 | **Fichier de debug persistant** | `tempfile.NamedTemporaryFile(mode='w+t', delete=False, …)` dans le répertoire temporaire du système (`/tmp`) ; **aucun `chmod`** dans le plugin — droits par défaut de `tempfile` (mêmes règles que `mkstemp()` : utilisateur créateur seul, selon la documentation Python ; non vérifié sur le NAS). Depuis la v2.7.0 le fichier est **fermé** par `onStop()` (D16) et son contenu est **masqué** (S1) ; il **n'est jamais supprimé** par le plugin (purge manuelle). | `onStart()`, `onStop()` | **Partiellement corrigé v2.7.0** (fermeture + contenu masqué) ; suppression non implémentée (**accepté**) |
 | S8 | **Consentement affiché dans le log d'erreur** | URL + `user_code` (courte durée de vie) : sensibilité faible. Volontairement **conservé en clair** (nécessaire à l'utilisateur), vérifié par un test de non-régression. | `parseDeviceCode()` | **Accepté** |
+| S10 *(v3.0.0)* | **Jeton Conso API longue durée (3 ans)** | Stocké par Domoticz dans `domoticz.db` (paramètre `Password` du matériel), en clair comme les jetons OAuth (S3). Masqué dans les sorties du plugin : `registerSecret()` remplace sa valeur littérale par `***` dans `maskSecrets()`, clé `password` ajoutée à `SENSITIVE_KEYS`, en-tête `Authorization` masqué par clé et par motif. Révocable dans l'espace client Enedis. | `onStart()`, `maskSecrets()`, `getData()` | **Accepté** (comme S3) ; masquage testé (`tests/test_secrets_masking.py`, `TestJetonConsoApi`) ; résiduel D17 |
+| S11 *(v3.0.0)* | **Blocage d'IP par Conso API** | Usage abusif ⇒ blocage automatique de l'IP sous 12 h, durée de plusieurs mois, sans recours ; quota Enedis partagé. | budget [§ 17.4](#174-budget-dappels-t15) | **Atténué** : ≤ 3 requêtes/jour/PRM, une seule tentative différée, pas de requête en parallèle |
 | S9 | **Debug du framework Domoticz (`Domoticz.Debugging(1)`) dès `Mode3` ≥ 2** | Activé aussi pour « Reset consentement », « Reset cache » et les « Faux clients ». Le log du framework n'est pas filtré par `maskSecrets()` : d'après la revue de code du plan 010 (non reproduit à l'exécution), il journalise en clair `Bearer`, `refresh_token` et la réponse de jetons dans le **log Domoticz**. | `onStart()` | **Risque connu — backlog (D17)**. Atténuation : avertissement dans [`readme.md`](../readme.md#paramètres-du-plugin) (n'activer que ponctuellement, puis purger le log) |
 
 ---
@@ -520,10 +535,10 @@ Les constats D1-D16 proviennent de la lecture statique du code à `1ef6adf` (**a
 | D7 | **Monolithe** de ≈ 2 727 lignes (≈ 2 776 en v2.7.0), une seule classe à état partagé, étapes enchaînées par `if` successifs ; **aucun test automatisé à `1ef6adf`** | Moyenne | ensemble du fichier | Évolution risquée, régression difficile à détecter | **Partiel** : harnais de tests (`tests/`, pytest) et CI ajoutés en v2.7.0 ; découpage du monolithe **backlog** |
 | D8 | **Jetons et `Authorization` en clair en debug** (cf. S1, S2) | Haute | `dumpDictToLog()`, `setConfigItem()` | Fuite de secrets dans `/tmp` et dans les logs | **Corrigé v2.7.0** (masquage M1, [§ 11](#11-journalisation-et-debug)) ; résiduel : D17 |
 | D9 | Jetons **non chiffrés** et `pickle.loads` sur données de la base (cf. S3, S4) | Moyenne | `getConfigItemAndChecksum()`, `loadCache()` | Compromission de la base ⇒ jetons lisibles / exécution de code | **Accepté** (risque accepté, backlog) |
-| D10 | **Dépendance à un proxy tiers** non maîtrisé (cf. S5) | Haute | `LOGIN_BASE_URI`, `API_BASE_URI` | Indisponibilité ou arrêt du proxy ⇒ plus de données Linky | **Backlog** (accepté) |
+| D10 | **Dépendance à un proxy tiers** non maîtrisé (cf. S5) | Haute | `LOGIN_BASE_URI`, `API_BASE_URI` | Indisponibilité ou arrêt du proxy ⇒ plus de données Linky | **Atténué v3.0.0** : source sélectionnable, Conso API par défaut et Legacy en repli ; dépendance à un service tiers maintenue (ADR 008) |
 | D11 | `setHistoryDays()` plafonne **définitivement** `iHistoryDaysForDaysView` à 35 j en historique court ; la branche « complet » ne restaure pas la valeur d'origine | Moyenne (probable) | `setHistoryDays()` | Dans une même session Domoticz, une récupération « complète » ultérieure pourrait se limiter à 35 j jusqu'au prochain redémarrage | **Backlog** : sans effet tant que `Mode2` ≤ 35 |
 | D12 | En production, le statut **500** est assimilé à « pas de production » **avant** la branche `429/500 → retry` | Faible | `handleConnection()` (étape `getdatahours`) | Une panne temporaire peut être prise pour une absence de production | **Inchangé (contournement volontaire)** ; comportement figé par un test de caractérisation |
-| D13 | Option « Faux client 9 » (`Mode3` = 19) sans liste de faux PRM | Faible | `onStart()` | Option inutilisable (erreur « Erreur à la lecture des points de livraison ») | **Backlog** |
+| D13 | Option « Faux client 9 » (`Mode3` = 19) sans liste de faux PRM | Faible | `onStart()` | Option inutilisable (erreur « Erreur à la lecture des points de livraison ») | **Clos v3.0.0** (bac à sable et faux clients supprimés) |
 | D14 | Jours fériés : zone **Métropole** fixe ; préfixe `p` du premier mot interprété comme « production » (ex. `public`) | Faible | `isCost2()`, `parseHcParameter()` | Alsace-Moselle / outre-mer non gérés ; syntaxe HC ambiguë | **Backlog** |
 | D15 | Code mort / inutilisé : constantes `API_ENDPOINT_DATA_DAILY_*`, `enedisDateToDatetime()`, attributs `bFirstMonths`, `dtDataInMemory` | Info | constantes, utilitaires | Bruit à la lecture | **Backlog** |
 | D16 | Fichier de debug non fermé ni purgé (cf. S7) | Faible | `onStart()` | Accumulation de fichiers dans `/tmp` | **Corrigé v2.7.0** pour la fermeture (`onStop()` : `close()` + `fDebug = None`) ; la purge reste manuelle (accepté) |
@@ -531,6 +546,7 @@ Les constats D1-D16 proviennent de la lecture statique du code à `1ef6adf` (**a
 | D18 | `setConfigItem()` : si la lecture de `Domoticz.Configuration()` lève une exception, `checksum` n'est jamais affecté et `return checksum` lève `UnboundLocalError` après le message d'erreur | Faible | `setConfigItem()` | Exception non gérée sur un chemin d'erreur de la persistance | **Backlog** |
 
 Backlog résiduel de la v2.7.0 (plan 010) : D6, D7 (découpage du monolithe), D10, D11, D13, D14, D15, D17, D18 ; D9 est un risque accepté.
+Après la v3.0.0 (plan 011) : D13 clos, D10 atténué ; D17 couvre aussi le jeton Conso API ; à retirer lors de la coupure de l'API v5 : code Legacy (Device Flow, constantes v5), backlog du plan 011.
 
 ### Corrections apportées aux hypothèses de l'analyse initiale (ARCos)
 
@@ -569,10 +585,70 @@ Résumé (voir le document ci-dessus pour le détail et la source) :
 | **Enedis Data Connect** | API officielle d'Enedis donnant accès aux données de comptage avec consentement de l'utilisateur |
 | **Device Flow (OAuth2)** | Flux d'autorisation pour appareils sans navigateur : l'application obtient un code, l'utilisateur le valide sur une page web, l'application récupère ensuite les jetons |
 | **Proxy RUSSANDOL** | Serveur tiers hébergeant le « Device Flow Proxy Server » et portant le contrat avec Enedis |
-| **Sandbox** | Environnement de test du proxy (`Mode3` 10 à 19), avec faux clients |
+| **Sandbox** | Environnement de test du proxy (`Mode3` 10 à 19), avec faux clients — **supprimé en v3.0.0** |
+| **Legacy** | Nom affiché (v3.0.0) de la source historique : proxy d'authentification + API Enedis Metering Data v5 |
+| **Conso API** | Service `conso.boris.sh` exposant l'API Enedis « Mesure synchrone V2 » avec un jeton personnel (source par défaut v3.0.0) |
+| **Budget d'appels** | Limite de requêtes Conso API par jour et par PRM (3), persistée dans `consoapi_budget` |
 | **P1 Smart Meter** | Type de dispositif Domoticz (Type `0xFA`, Subtype `0x01`) pour compteurs à deux index et production |
 | **Managed Counter** | Type de dispositif Domoticz (Type `0xF3`, Subtype `0x21`) utilisé en repli pour Domoticz < 4.11774 |
 | **`sValue` / `nValue`** | Chaînes/valeurs de mise à jour d'un dispositif Domoticz |
 | **Heartbeat** | Tic périodique de Domoticz appelant `onHeartbeat()` |
 | **dzVents** | Moteur de scripts Lua de Domoticz (non utilisé par ce plugin) |
 | **Cache négatif** | Mémorisation qu'un PRM n'a pas de données de consommation / production (`noConsumption`, `noProduction`) |
+
+---
+
+## 17. Source Conso API (v3.0.0)
+
+Plan d'action 011 et [ADR 008](https://github.com/vzwingma/domotique/blob/master/docs/adr/008-source-donnees-linky-conso-api-v2.md) du dépôt `domotique` ; contrat constaté sur captures réelles ([rapport Phase 0](https://github.com/vzwingma/domotique/blob/master/docs/plans/011_reports/PHASE_0_CONTRAT_CONSO_API_V2.md)).
+
+### 17.1 Sélection et paramètres
+
+`onStart()` lit `Address`, `Username` et `Password` **avant** le `pop()` historique ([§ 3](#3-paramètres-du-plugin)). En mode Conso API (`bConsoApi`) : `iAlternateAddress = CONSOAPI_ADDRESS_INDEX` (1), `lConsoApiPrm` = PRM du paramètre, `iPeakBatchDays = 365`. Jeton vide ou PRM ≠ 14 chiffres ⇒ `myError()`, `isStarted = False`, aucune requête. Les champs `bConsoApi`, `sConsoApiToken`, `lConsoApiPrm` sont affectés **après** le second appel à `__init__()`.
+
+### 17.2 Requêtes
+
+| Élément | Valeur |
+|---|---|
+| Hôte | `conso.boris.sh:443` (`API_BASE_URI[1]`) |
+| Chemin | `/api/<type>` ; `CONSOAPI_TYPES` : `consumption_load_curve` → `courbe_de_charge_consommation`, `daily_consumption_max_power` → `puissance_conso_max_quotidienne`, `daily_consumption` → `consommation_quotidienne` (non appelé) |
+| Paramètres | `pointId` (PRM), `dateDebut`, `dateFin` (**exclusive**, `AAAA-MM-JJ`) |
+| En-têtes | `Authorization: Bearer <jeton>` ; `User-Agent: DomoticzLinkyPlugin/<version> (+https://github.com/vzwingma/DomoticzLinky)` |
+| Lots | courbe ≤ **7 jours** (limite Enedis `ADAM-DC-0015`, déjà le découpage de `calculateDaysLeft()`) ; puissance max par lots de **365 jours** |
+| Production | jamais demandée (étape `prod` ⇒ `save`) |
+| Machine à états | `idle` ⇒ `start` (pas de Device Flow) ; `start` lit `lConsoApiPrm` |
+
+### 17.3 Réponses et adaptateur
+
+Forme V2 (commune aux types) : `{"idPrm", "periode", "pas", "grandeur": [{"grandeurMetier": "CONS", "grandeurPhysique", "unite", "points": [{"v", "d", …}]}]}`.
+
+| Type | Unité | Pas | `d` |
+|---|---|---|---|
+| Courbe de charge | W (puissance moyenne, `PA`) | `PT15M` | **fin d'intervalle**, heure locale (`00:15` … `J+1 00:00`) |
+| Puissance max | VA (`PMA`) | `P1D` | horodatage du pic |
+| Consommation quotidienne | Wh (`EA`) | `P1D` | jour |
+
+`consoApiV2ToInternal()` (fonction de module) convertit en forme v5 : `idPrm` → `meter_reading.usage_point_id`, `grandeur[CONS].points[{v,d}]` → `meter_reading.interval_reading[{value,date}]` ; toute autre forme est renvoyée **inchangée** (réponses Legacy, erreurs). Elle est appelée au début de `exploreDataHours()` et `exploreDataPeaks()`. Le pas de 15 min est absorbé par la moyenne horaire existante ([§ 7.6](#76-agrégation-30-min--1-h) : `accumulation / steps` sur 4 points) ; la somme des valeurs horaires (convention fin d'intervalle, héritée de v5) égale exactement la consommation quotidienne Enedis (test `test_heures_somme_egale_au_quotidien`).
+
+Erreurs : `{"status", "message", "error": {"error": "ADAM-…", "error_description"}}` (erreur Enedis), `{"status", "message", "error": {"issues", "name": "ZodError"}}` (validation Conso API), `{"status": 401, "message"}`. `getError()` lit l'erreur imbriquée et, à défaut de description, `message` si `status` est présent.
+
+### 17.4 Budget d'appels (T1.5)
+
+Règles d'usage Conso API : au plus 2 à 3 appels par jour et par PRM, retries compris ; jamais en boucle ni en parallèle ; une nouvelle tentative quelques heures plus tard au plus.
+
+| Mécanisme | Comportement | Fonction |
+|---|---|---|
+| Compteur persisté | clé `consoapi_budget` = `{"day", "count": {PRM: n}, "history": {PRM: n}, "retry": bool}`, remis à zéro chaque jour | `consoApiGetBudget()`, `consoApiSaveBudget()` |
+| Contrôle avant requête | `count ≥ 3` ⇒ « Budget Conso API du jour atteint », PRM suivant (`prod` ⇒ `save`) ; lot **≠ le plus récent** (`not bFirstBatch`) = lot d'historique : au plus **1 par jour**, jamais sur la dernière requête du jour, sinon reporté (« skip », traité comme cache) | `consoApiCheckBudget()` (appelée par `getDataHours()` / `getDataPeaks()`) |
+| Garde-fou à l'envoi | chaque envoi réel incrémente le compteur ; au-delà de 3, envoi annulé, étape `done` | `consoApiRegisterRequest()` (dans `connectAndSend()` et `reconnectAndResend()`) |
+| Codes HTTP | 401/403 ⇒ message jeton, `bConsoApiNoRetry`, `done` (pas de `disablePlugin()`) ; 400 ⇒ erreur affichée, `bConsoApiNoRetry` ; 429, ≥ 500, sans statut ⇒ `consoApiDefer()` (`done`, `bConsoApiDefer`) ; 404 ⇒ chemin existant | `consoApiHandleStatus()` |
+| Time-out | 3 heartbeats sans réponse ⇒ `consoApiDefer()` au lieu du renvoi | `handleConnection()` (`connecting` / `sending`) |
+| Fin de cycle | échec temporaire ou veille incomplète (< 23 h en cache) et pas d'échec définitif ⇒ **une seule** tentative à +3 h si avant 22 h (`retry` du jour) ; sinon lendemain 8 h + minutes aléatoires | `consoApiScheduleNext()`, `consoApiYesterdayComplete()` |
+| Redémarrage | `previous_successful_connection_date` = aujourd'hui ⇒ pas de connexion avant demain | `onStart()` |
+| Séquentiel | une connexion à la fois, PRM l'un après l'autre (machine à états inchangée) | — |
+
+Cycle nominal : **2 requêtes** par PRM (courbe du lot récent + puissance max) ; l'historique long (`Mode2` > 7) se complète à raison d'un lot de 7 jours par jour, les lots déjà en cache n'étant pas redemandés.
+
+### 17.5 Tests
+
+`tests/test_consoapi_adapter.py` (conversion, sommes horaires, erreurs V2), `tests/test_consoapi_source.py` (paramètres, requêtes, codes HTTP, budget, historique étalé, multi-PRM, redémarrage), `tests/test_secrets_masking.py::TestJetonConsoApi` ; fixtures anonymisées `tests/fixtures/consoapi_v2/` (PRM `00000000000000`) ; outils `tests/consoapi_helpers.py` (horloge figée, pilote de cycle).

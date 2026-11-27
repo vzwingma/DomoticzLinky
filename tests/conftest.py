@@ -36,6 +36,8 @@ CLIENT_SECRET = "CLIENT-SECRET-SENTINEL"
 
 def _default_parameters():
     return {
+        # Suites v2.x : chemin Legacy (la source par défaut v3.0.0 est Conso API)
+        "Address": "legacy",
         "Mode1": "7",
         "Mode2": "7",
         "Mode3": "0",

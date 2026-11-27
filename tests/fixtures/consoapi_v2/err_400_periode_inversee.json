@@ -1,0 +1,8 @@
+{
+ "status": 400,
+ "message": "The Enedis API returned an error",
+ "error": {
+  "error": "ADAM-ERR0002",
+  "error_description": "La date de fin doit être supérieure à la date de début."
+ }
+}

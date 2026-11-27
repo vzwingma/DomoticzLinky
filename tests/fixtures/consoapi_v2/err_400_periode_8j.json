@@ -1,0 +1,8 @@
+{
+ "status": 400,
+ "message": "The Enedis API returned an error",
+ "error": {
+  "error": "ADAM-DC-0015",
+  "error_description": "La période demandée est supérieure à 7 jours."
+ }
+}

@@ -4,6 +4,37 @@ Toutes les évolutions notables du fork `vzwingma/DomoticzLinky` sont consignée
 
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [3.0.0] - 2026-11-27
+
+Version **incompatible** : nouveaux paramètres du matériel, reconfiguration nécessaire (voir [readme.md](readme.md#migration-depuis-la-version-2x)). Plan d'action 011 et ADR 008 du dépôt [vzwingma/domotique](https://github.com/vzwingma/domotique).
+
+### Ajouté
+
+- **Source de données Conso API** ([conso.boris.sh](https://conso.boris.sh), API Enedis « Mesure synchrone V2 »), source **par défaut**. Pas de Device Flow : jeton personnel (Bearer) obtenu après consentement sur conso.boris.sh, valable 3 ans, révocable dans l'espace client Enedis.
+- Nouveaux paramètres du matériel : `Address` = « Source des données » (Conso API / Legacy), `Username` = PRM (14 chiffres, plusieurs séparés par des virgules), `Password` = jeton Conso API (champ masqué). Jeton vide ou PRM invalide : erreur explicite au démarrage, aucune requête.
+- Adaptateur des réponses V2 vers le format interne : courbe de charge au pas de **15 min** (W, horodatage de fin d'intervalle), puissance maximale (VA), cœur du calcul (moyenne horaire, HC/HP, devices `Linky <PRM>` et leur historique) inchangé.
+- **Budget d'appels** conforme aux [règles d'usage de Conso API](https://conso.boris.sh/blocage-ip) : au plus **3 requêtes par jour et par PRM**, retries compris (compteur conservé en base, y compris après redémarrage) ; cycle normal = 2 requêtes (courbe 7 j + puissance max) ; historique complet **étalé** à raison d'un lot par jour ; **une seule** nouvelle tentative, 3 h plus tard (avant 22 h), en cas d'erreur temporaire ou de données de la veille incomplètes, sinon le lendemain ; pas de nouvelle requête au redémarrage si le cycle du jour a réussi ; requêtes strictement séquentielles.
+- En-tête `User-Agent: DomoticzLinkyPlugin/<version> (+https://github.com/vzwingma/DomoticzLinky)`.
+- Tests : fixtures V2 anonymisées, `tests/test_consoapi_adapter.py`, `tests/test_consoapi_source.py`, masquage du jeton dans `tests/test_secrets_masking.py` (182 tests).
+
+### Modifié
+
+- L'ancien proxy (API Enedis v5) devient la source **Legacy**, conservée en repli jusqu'à la coupure de l'API v5 (valeur `legacy` ; `russandol` accepté).
+- Mode Conso API : 401/403 → message « jeton invalide ou expiré », pas de nouvelle tentative avant le lendemain (le plugin n'est plus désactivé) ; 400 → erreur Enedis (`ADAM-*`) affichée, pas de nouvelle tentative ; 429, 5xx et délai dépassé → une tentative différée (le renvoi après 5 s et la relance horaire restent propres à la source Legacy).
+- Mode Conso API : aucune requête de production ; lots de puissance maximale de **365 jours** (1 095 en Legacy).
+- `getError()` lit les erreurs imbriquées V2 (`error.error`, `error.error_description`) et le champ `message`.
+- Libellés de `Mode3` (« Debug ») clarifiés : « Simple (fichier de log dans /tmp) », « Avancé (fichier de log + debug Domoticz) », « Legacy : effacer consentement et jetons, puis remettre Non », « Vider le cache des données, puis remettre Non ».
+- Version du plugin portée à **3.0.0**.
+
+### Supprimé
+
+- Serveur de test (bac à sable `opensrcdev.alwaysdata.net`) et options « Faux client 0 à 9 » (`Mode3` = 10 à 19) — clôt D13.
+
+### Sécurité
+
+- Le jeton Conso API est masqué (`***`) partout dans les journaux du plugin et le fichier de debug, y compris s'il est renvoyé dans une réponse ; la clé `password` est ajoutée aux clés sensibles.
+- Limite connue inchangée (D17) : le debug du framework Domoticz (`Mode3` ≥ 2) n'est pas filtré et peut écrire l'en-tête `Authorization` en clair dans le log Domoticz.
+
 ## [2.7.0] - 2026-11-25
 
 ### Sécurité
