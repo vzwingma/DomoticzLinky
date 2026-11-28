@@ -70,7 +70,7 @@ class TestParametres:
         assert "Password" not in plugin_module.Parameters
 
     def test_version_3(self, plugin_module):
-        assert 'version="3.0.0"' in plugin_module.__doc__
+        assert 'version="3.1.0"' in plugin_module.__doc__
 
 
 class TestRequetes:

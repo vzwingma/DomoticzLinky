@@ -109,7 +109,7 @@ class TestExploreData:
 
     def test_regression_detectee_si_adaptateur_casse(self, plugin_module, prm_plugin, monkeypatch):
         # Preuve T2.2 : sans adaptateur, la réponse V2 n'est plus lue
-        monkeypatch.setattr(plugin_module, "consoApiV2ToInternal", lambda d: d)
+        monkeypatch.setattr(plugin_module, "consoApiV2ToInternal", lambda d, *args: d)
         assert prm_plugin.exploreDataHours(response("200_courbe_de_charge_consommation")) is False
 
 

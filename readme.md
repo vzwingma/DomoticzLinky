@@ -105,7 +105,8 @@ Le paramètre **« Source des données »** choisit d'où viennent les mesures :
 
 | Choix | Service | Authentification | Remarques |
 |---|---|---|---|
-| **Conso API** (défaut) | [conso.boris.sh](https://conso.boris.sh) — API Enedis « Mesure synchrone V2 » | jeton personnel saisi dans le matériel | source recommandée ; pas de production |
+| **Conso API** (défaut) | [conso.boris.sh](https://conso.boris.sh) — API Enedis « Mesure synchrone V2 » | jeton personnel saisi dans le matériel | source recommandée ; consommation seule |
+| **Conso API + production** (v3.1.0) | idem | idem | consommation **et** production (injection), voir [Production (Conso API)](#production-conso-api-v310) |
 | **Legacy** | ancien proxy d'authentification (API Enedis v5, en fin de vie) | consentement dans le log Domoticz | conservée en repli ; production disponible ; configuration, hébergement et consentement : [README.legacy](README.legacy) |
 
 #### Configurer Conso API
@@ -142,6 +143,16 @@ Conso API est un service gratuit dont le quota Enedis est partagé par tous ses 
 - aucune requête au redémarrage si le cycle du jour a déjà réussi ; jamais de requêtes en parallèle.
 
 Les données d'un jour J sont publiées par Enedis vers 8 h à J+1 (parfois 1 à 2 h plus tard).
+
+#### Production (Conso API, v3.1.0)
+
+Pour les installations qui **injectent** sur le réseau (photovoltaïque en autoconsommation avec vente du surplus, ou vente totale), choisissez « Source des données » = **Conso API + production**. Le plugin demande alors aussi la courbe de charge de production (`courbe_de_charge_production`) et la range dans la partie « retour » (R1 / R2) du même dispositif `Linky <PRM>`, comme le faisait la source Legacy.
+
+- **Ce qui est mesuré** : Enedis ne voit que l'énergie **injectée** sur le réseau (le surplus), pas la production totale des panneaux ; l'énergie autoconsommée n'apparaît ni en consommation ni en production.
+- **Prérequis** : la collecte de la courbe de charge de production doit être activée pour le PRM dans l'espace client Enedis, et le consentement Conso API doit couvrir ce PRM. Selon le contrat, le point de production peut avoir un PRM distinct de celui de consommation : renseignez alors les deux PRM (séparés par une virgule) ; le plugin fusionne un dispositif « consommation seule » et un dispositif « production seule » comme en Legacy.
+- **Budget inchangé, au plus 3 requêtes par jour et par PRM** : le cycle normal devient **2 requêtes** (courbe de consommation + courbe de production) ; la **puissance maximale** n'est redemandée qu'**au plus une fois tous les 7 jours** (un lot couvre les jours manquants) et passe alors avant l'historique ; l'historique long se récupère toujours à raison d'un lot par jour (consommation d'abord, puis production). Les jours où les 3 requêtes sont utilisées, la nouvelle tentative différée n'est pas possible : la reprise se fait le lendemain.
+- **Pas de production pour ce PRM** (réponse 400 ou 404 d'Enedis à la première requête de production) : le plugin le mémorise et ne la redemande plus, sans erreur. Après avoir activé la collecte côté Enedis, mettez « Debug » sur « Vider le cache des données » le temps d'un redémarrage pour réessayer, ou revenez à « Conso API » si vous n'avez pas de production.
+- Le pic affiché sur le tableau de bord (« Pic consommation journée dernière ») peut donc dater de quelques jours dans ce mode.
 
 #### Migration depuis la version 2.x
 
@@ -228,7 +239,7 @@ Cette section résume les paramètres affichés dans Configuration / Matériel p
 
 | Paramètre | Libellé affiché dans Domoticz | Rôle | Valeurs | Défaut |
 |---|---|---|---|---|
-| `Address` | « Source des données » | Source des mesures (voir [Source des données](#source-des-données-v300)) | « Conso API » (`consoapi`) ou « Legacy » (`legacy`) ; vide = Conso API | Conso API |
+| `Address` | « Source des données » | Source des mesures (voir [Source des données](#source-des-données-v300)) | « Conso API » (`consoapi`), « Conso API + production » (`consoapi_prod`) ou « Legacy » (`legacy`) ; vide = Conso API | Conso API |
 | `Username` | « Conso API : PRM (14 chiffres, plusieurs séparés par des virgules) » | PRM interrogé(s) en mode Conso API (ignoré en Legacy, qui reçoit la liste du proxy) | un ou plusieurs numéros de 14 chiffres | vide |
 | `Password` | « Conso API : jeton (Bearer) » | Jeton Conso API (champ masqué, ignoré en Legacy) | chaîne fournie par conso.boris.sh | vide |
 | `Mode1` | « Nombre de jours à récupérer pour la vue par heures (0 min, pour désactiver la récupération par heures, 7 max) » | Profondeur de l'historique de la vue par heures (voir [Nombre de jours à récupérer](#nombre-de-jours-à-récupérer)) | entier de 0 à 7 ; `0` désactive la vue par heures ; valeur invalide : 7 | 7 |

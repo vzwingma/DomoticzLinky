@@ -4,6 +4,24 @@ Toutes les évolutions notables du fork `vzwingma/DomoticzLinky` sont consignée
 
 Le format s'inspire de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; le projet suit le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [3.1.0] - 2026-11-27
+
+Version compatible : sans changement de paramètre, le comportement de la 3.0.0 est inchangé (production désactivée).
+
+### Ajouté
+
+- **Production (injection) en mode Conso API**, sur option : nouvelle valeur « Conso API + production » (`consoapi_prod`) du paramètre « Source des données ». Courbe de charge de production (`courbe_de_charge_production`, grandeur `PROD`, W au pas de 15 min) rangée dans la partie retour (R1 / R2) du dispositif `Linky <PRM>`, comme en Legacy ; fusion consommation seule / production seule inchangée.
+- Budget toujours plafonné à **3 requêtes par jour et par PRM** : cycle normal = courbe conso + courbe production ; puissance maximale redemandée au plus une fois tous les 7 jours (date mémorisée par PRM, seulement après une réponse valide), prioritaire sur l'historique de consommation ; l'historique de production peut utiliser la dernière requête du jour (pas de tentative différée ces jours-là).
+- PRM sans production (400 / 404 à la première requête de production) : mémorisé dans le cache, plus de requête de production, sans erreur ni tentative différée.
+- Tests : captures réelles anonymisées `200_courbe_de_charge_production.json` (pas de **30 min**, la consommation est à 15 min) et `200_production_quotidienne.json` (référence : la somme horaire de la courbe redonne le total journalier Enedis, 7 053 Wh le 25/11/2026), `tests/test_consoapi_production.py` (212 tests au total).
+- Mode production : un jour dont seule la consommation est récupérée (lot d'historique de consommation, la production du même jour arrive un jour suivant) n'est pas écrit dans le dispositif, pour ne pas écraser son retour à 0 ; il est écrit quand sa production arrive.
+- Report silencieux d'un lot d'historique quand les 3 requêtes du jour sont utilisées (plus de message « Budget Conso API du jour atteint » ni de cycle en échec).
+
+### Modifié
+
+- `consoApiV2ToInternal()` prend la grandeur métier attendue (`CONS` par défaut, `PROD` pour la production).
+- Version du plugin portée à **3.1.0**.
+
 ## [3.0.0] - 2026-11-27
 
 Version **incompatible** : nouveaux paramètres du matériel, reconfiguration nécessaire (voir [readme.md](readme.md#migration-depuis-la-version-2x)). Plan d'action 011 et ADR 008 du dépôt [vzwingma/domotique](https://github.com/vzwingma/domotique).

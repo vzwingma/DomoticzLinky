@@ -63,6 +63,8 @@ def nominal_responder(request):
     url = request["URL"]
     if "courbe_de_charge_consommation" in url:
         return response("200_courbe_de_charge_consommation")
+    if "courbe_de_charge_production" in url:
+        return response("200_courbe_de_charge_production")
     if "puissance_conso_max_quotidienne" in url:
         return response("200_puissance_conso_max_quotidienne")
     if "consommation_quotidienne" in url:
