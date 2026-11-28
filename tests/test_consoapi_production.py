@@ -1,7 +1,10 @@
 """v3.1.0 — production (injection) en mode Conso API, sur option (source « consoapi_prod »).
 
-Fixture `200_courbe_de_charge_production` : courbe synthétique (grandeur PROD, W au pas de 15 min, cloche 9 h - 17 h,
-pic 1 800 W) sur la même période que la fixture de consommation (23 -> 26/11/2026), PRM anonymisé.
+Fixtures : captures réelles anonymisées du 2026-11-28 (PRM masqué) :
+* `200_courbe_de_charge_production` : 25/11/2026, grandeur PROD, W, **pas de 30 min** (PT30M, la consommation est
+  au pas de 15 min), injection entre 9 h 30 et 17 h ;
+* `200_production_quotidienne` : 19 -> 25/11/2026, Wh (non utilisée par le plugin, sert de référence : la somme
+  de la courbe du 25/11 doit redonner 7 053 Wh).
 
 Budget inchangé : au plus 3 requêtes par jour et par PRM. Cycle normal = courbe conso + courbe production ;
 la puissance max n'est redemandée qu'au plus une fois tous les 7 jours.
@@ -76,8 +79,13 @@ class TestAdaptateur:
         out = plugin_module.consoApiV2ToInternal(json.loads(load("200_courbe_de_charge_production").decode()), "PROD")
         readings = out["meter_reading"]["interval_reading"]
         assert out["meter_reading"]["usage_point_id"] == PRM
-        assert len(readings) == 288
-        assert max(float(r["value"]) for r in readings) == 1800.0
+        assert len(readings) == 48  # pas de 30 min
+        assert max(float(r["value"]) for r in readings) == 1934.0
+
+    def test_courbe_absente_pour_cons(self, plugin_module):
+        # Réponse de production lue comme de la consommation : aucun point (pas de mélange des grandeurs)
+        out = plugin_module.consoApiV2ToInternal(json.loads(load("200_courbe_de_charge_production").decode()))
+        assert out["meter_reading"]["interval_reading"] == []
 
 
 class TestCycle:
@@ -91,9 +99,13 @@ class TestCycle:
     def test_production_stockee_et_device_mis_a_jour(self, prod, plugin_module, domoticz):
         run_cycle(prod)
         hours = prod.dData[PRM]["data"]["2026-11-25"]["production1_hours"]
-        # Moyenne horaire des 4 points de 15 min ; heure 13 = fin d'intervalle 12 h -> 13 h, autour du pic
-        assert max(hours.values()) == pytest.approx(1800.0, rel=0.05)
-        assert hours.get(3, 0.0) == 0.0
+        # Pas de 30 min : moyenne des 2 points de l'heure, horodatage de fin d'intervalle (14 h = 13 h -> 14 h)
+        assert hours[14] == pytest.approx((1790 + 1934) / 2)
+        assert hours[3] == 0.0
+        # Moyenne horaire (W) sur 1 h = Wh : la somme de la journée redonne production_quotidienne du 25/11
+        daily = json.loads(load("200_production_quotidienne").decode())["grandeur"][0]["points"]
+        expected_wh = float(next(p["v"] for p in daily if p["d"] == "2026-11-25"))
+        assert sum(hours.values()) == pytest.approx(expected_wh)
         assert prod.dData[PRM]["data"]["2026-11-25"]["consumptionpeak"] == 2415.0
         assert plugin_module.Devices[1].Update.called
         assert domoticz.logs["Error"] == []
