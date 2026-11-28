@@ -184,6 +184,8 @@ DEFAULT_PEAK_BATCH_DAYS = 1095
 # Avec la production, la puissance max n'est demandée qu'une fois par semaine (le lot couvre les jours manquants),
 # pour garder une requête de réserve dans le budget du jour (cycle normal = courbe conso + courbe production)
 CONSOAPI_PROD_PEAK_INTERVAL_DAYS = 7
+# PRM sans production (400/404 au premier lot) : mémorisé, puis nouvel essai (1 requête) après ce délai
+CONSOAPI_NO_PRODUCTION_RETRY_DAYS = 30
 PRM_PATTERN = re.compile(r"^\d{14}$")
 
 HEADERS = {
@@ -1703,6 +1705,7 @@ class BasePlugin:
             self.dData[sUsagePointCurrentId] = {"data": dict(), "state": initState()}
         if bProdMode:
             self.dData[sUsagePointCurrentId]["state"]["noProduction"] = bEmpty
+            self.dData[sUsagePointCurrentId]["state"]["noProductionDate"] = datetimeToSQLDateString(datetime.now()) if bEmpty else ""
         else:
             self.dData[sUsagePointCurrentId]["state"]["noConsumption"] = bEmpty
 
@@ -1713,11 +1716,31 @@ class BasePlugin:
             if sUsagePointCurrentId not in self.dData:
                 return False
             if bProdMode:
-                return self.dData[sUsagePointCurrentId]["state"]["noProduction"]
+                dState = self.dData[sUsagePointCurrentId]["state"]
+                if dState["noProduction"] and self.bConsoApi and self.bConsoApiProd:
+                    return not self.consoApiNoProductionExpired(dState)
+                return dState["noProduction"]
             else:
                 return self.dData[sUsagePointCurrentId]["state"]["noConsumption"]
         except:
             return False
+
+
+    # Conso API + production : le « pas de production » mémorisé est-il périmé (nouvel essai) ?
+    # Un état sans date (cache écrit avant ce correctif) est daté d'aujourd'hui : le délai court à partir de maintenant.
+    def consoApiNoProductionExpired(self, dState):
+        sDate = dState.get("noProductionDate", "")
+        try:
+            dtMarked = datetime.strptime(str(sDate), "%Y-%m-%d")
+        except ValueError:
+            dState["noProductionDate"] = datetimeToSQLDateString(datetime.now())
+            return False
+        if (datetime.now() - dtMarked) >= timedelta(days=CONSOAPI_NO_PRODUCTION_RETRY_DAYS):
+            self.myDebug("Pas de production mémorisé depuis plus de " + str(CONSOAPI_NO_PRODUCTION_RETRY_DAYS) + " jours : nouvel essai")
+            dState["noProduction"] = False
+            dState["noProductionDate"] = ""
+            return True
+        return False
 
 
     # return True if data already in memory
@@ -2767,7 +2790,7 @@ def setRefreshTime(dtDate=None):
 
 
 def initState():
-    return {"noConsumption": False, "noProduction" : False}
+    return {"noConsumption": False, "noProduction" : False, "noProductionDate": ""}
 
 
 def initData():

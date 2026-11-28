@@ -159,6 +159,47 @@ class TestCycle:
         day2 = run_cycle(prod, responder)
         assert "courbe_de_charge_production" not in types_of(day2)
 
+    def test_pas_de_production_nouvel_essai_a_30_jours(self, prod, clock):
+        absent = {"on": True}
+
+        def responder(request):
+            if absent["on"] and "courbe_de_charge_production" in request["URL"]:
+                return response(status=404, body={"status": 404, "message": "Aucune donnée"})
+            return nominal_responder(request)
+
+        run_cycle(prod, responder)
+        assert prod.getCacheNoData(PRM, True) is True
+        # 29 jours plus tard : toujours mémorisé, aucune requête de production
+        clock.current = clock(2026, 12, 25, 8, 34, 45)
+        assert "courbe_de_charge_production" not in types_of(run_cycle(prod, responder))
+        assert prod.getCacheNoData(PRM, True) is True
+        # 30 jours plus tard : un nouvel essai, cette fois la production existe
+        absent["on"] = False
+        clock.current = clock(2026, 12, 26, 8, 34, 45)
+        day30 = run_cycle(prod, responder)
+        assert types_of(day30).count("courbe_de_charge_production") == 1
+        assert prod.getCacheNoData(PRM, True) is False
+
+    def test_pas_de_production_remémorisé_si_toujours_absente(self, prod, clock):
+        def responder(request):
+            if "courbe_de_charge_production" in request["URL"]:
+                return response(status=404, body={"status": 404, "message": "Aucune donnée"})
+            return nominal_responder(request)
+
+        run_cycle(prod, responder)
+        clock.current = clock(2026, 12, 26, 8, 34, 45)
+        day30 = run_cycle(prod, responder)
+        assert types_of(day30).count("courbe_de_charge_production") == 1
+        assert prod.getCacheNoData(PRM, True) is True
+        # Le délai repart de la date du nouvel essai
+        clock.current = clock(2026, 12, 27, 8, 34, 45)
+        assert "courbe_de_charge_production" not in types_of(run_cycle(prod, responder))
+
+    def test_cache_ancien_sans_date_daté_d_aujourd_hui(self, prod, clock):
+        prod.dData[PRM] = {"data": {}, "state": {"noConsumption": False, "noProduction": True}}
+        assert prod.getCacheNoData(PRM, True) is True
+        assert prod.dData[PRM]["state"]["noProductionDate"] == "2026-11-26"
+
     @pytest.mark.parametrize("status", [401, 403])
     def test_jeton_invalide_sur_production(self, prod, domoticz, status):
         def responder(request):
