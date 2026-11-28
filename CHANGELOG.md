@@ -20,6 +20,7 @@ Version compatible : sans changement de paramètre, le comportement de la 3.0.0 
 ### Modifié
 
 - `consoApiV2ToInternal()` prend la grandeur métier attendue (`CONS` par défaut, `PROD` pour la production).
+- PRM sans production : le « pas de production » mémorisé est réessayé **après 30 jours** (une requête), au lieu d'être définitif jusqu'au vidage du cache ; un cache antérieur sans date est daté du premier accès.
 - Version du plugin portée à **3.1.0**.
 
 ## [3.0.0] - 2026-11-27
