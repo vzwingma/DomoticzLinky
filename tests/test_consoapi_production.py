@@ -111,6 +111,21 @@ class TestCycle:
         assert domoticz.logs["Error"] == []
         assert prod.bGlobalHasAFail is False
 
+    def test_jour_sans_production_recuperee_non_ecrase(self, prod, plugin_module):
+        # Fixtures : conso du 23 au 25/11, production du 25/11 seulement. Les totaux journaliers du 23 et du 24
+        # ne doivent pas être écrits (retour à 0 qui écraserait la valeur en base), celui du 25 si.
+        run_cycle(prod)
+        days = [c.kwargs["sValue"].split(";")[-1] for c in plugin_module.Devices[1].Update.call_args_list]
+        assert "2026-11-25" in days
+        assert "2026-11-23" not in days
+        assert "2026-11-24" not in days
+
+    def test_sans_option_production_jours_ecrits(self, plugin_module, domoticz, clock):
+        plugin = start_consoapi(plugin_module, Address="consoapi")
+        run_cycle(plugin)
+        days = [c.kwargs["sValue"].split(";")[-1] for c in plugin_module.Devices[1].Update.call_args_list]
+        assert {"2026-11-23", "2026-11-24", "2026-11-25"} <= set(days)
+
     def test_puissance_max_hebdomadaire(self, prod, clock):
         run_cycle(prod)
         clock.current = clock(2026, 11, 27, 8, 34, 45)

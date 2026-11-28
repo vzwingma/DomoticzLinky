@@ -1095,7 +1095,12 @@ class BasePlugin:
                         if iHourCount >= 12:
                             # Here we can shift day accordingly to iHour, to use date from beginning of data
                             sShortDate = datetimeToSQLDateString(dDate2 - timedelta(hours=iHourCount))
-                            if not self.addToDevice(oDevice, iDConsumption1, iDConsumption2, iDProduction1, iDProduction2, sShortDate):
+                            # Conso API + production : jour dont la production n'est pas encore récupérée (lot
+                            # d'historique de consommation seul) -> pas d'écriture, sinon le retour du jour serait
+                            # écrasé à 0 ; il sera écrit quand le lot de production correspondant arrivera
+                            if self.consoApiProdMissing(sUsagePointCurrentId, dUsagePointData.get(sShortDate)):
+                                self.myDebug("Jour " + sShortDate + " non écrit : production pas encore récupérée")
+                            elif not self.addToDevice(oDevice, iDConsumption1, iDConsumption2, iDProduction1, iDProduction2, sShortDate):
                                 return False
                         iDConsumption1 = 0
                         iDConsumption2 = 0
@@ -1856,6 +1861,17 @@ class BasePlugin:
             dBudget["history"][self.sUsagePointId] = iHistory + 1
             self.consoApiSaveBudget(dBudget)
         return "go"
+
+
+    # Mode production : jour avec consommation mais sans production récupérée (et PRM producteur) ?
+    def consoApiProdMissing(self, sUsagePointCurrentId, dOneData):
+        if (not self.bConsoApi) or (not self.bConsoApiProd) or (not dOneData):
+            return False
+        if self.getCacheNoData(sUsagePointCurrentId, True):
+            return False
+        bHasConso = bool(dOneData["consumption1_hours"] or dOneData["consumption2_hours"])
+        bHasProd = bool(dOneData["production1_hours"] or dOneData["production2_hours"])
+        return bHasConso and (not bHasProd)
 
 
     # Mode production : la puissance max est-elle à redemander pour ce PRM (au plus une fois par semaine) ?
