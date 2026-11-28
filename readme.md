@@ -5,7 +5,7 @@ Plugin [Domoticz](https://domoticz.com) qui récupère les données de votre com
 Ce dépôt est un **fork maintenu** de [guillaumezin/DomoticzLinky](https://github.com/guillaumezin/DomoticzLinky), dont l'auteur n'utilise plus Domoticz et qui n'est plus maintenu. Le fork ajoute la source Conso API, conserve l'ancien proxy sous le nom « Legacy » (voir [README.legacy](README.legacy)) et vise un usage général, indépendant de tout projet particulier.
 
 - **Notes techniques** : rétroconception du code — paramètres, machine à états, authentification, devices, persistance, sécurité, dette technique : [docs/RETROCONCEPTION.md](docs/RETROCONCEPTION.md).
-- **Historique** : [CHANGELOG.md](CHANGELOG.md) (version courante : **3.0.0**).
+- **Historique** : [CHANGELOG.md](CHANGELOG.md) (version courante : **3.1.0**).
 - **Tests et CI** : le dossier `tests/` contient une suite `pytest` (faux module `Domoticz`, aucun Domoticz requis) ; `ruff.toml` configure un lint minimal. La CI GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) exécute `py_compile`, `ruff` et `pytest` sur Python 3.11 et 3.13. En local :
 
 ```
@@ -300,6 +300,7 @@ Passez le paramètre "Debug" à "Simple" et cliquez sur "Modifier". Observez le 
 * **epierre** - *Linky external script for Domoticz* - [domoticz_linky](https://github.com/empierre/domoticz_linky)
 * **Guillaume Zin** ([guillaumezin](https://github.com/guillaumezin)) - *Auteur du plugin d'origine : portage vers le plugin framework de Domoticz et adaptation du code de Device Flow Proxy Server pour Enedis* - [DomoticzLinky](https://github.com/guillaumezin/DomoticzLinky) et [DomoticzFlowProxyServer](https://github.com/guillaumezin/Device-Flow-Proxy-Server)
 * **vzwingma** ([GitHub](https://github.com/vzwingma)) - *Maintenance du fork, source Conso API (v3.0.0)* - [DomoticzLinky](https://github.com/vzwingma/DomoticzLinky)
+* **Bartras** ([GitHub](https://github.com/Bartras)) - *Production (injection) via Conso API, v3.1.0* - [DomoticzLinky](https://github.com/vzwingma/DomoticzLinky)
 * **Frédéric Caillet** - *Contractualisation, maintenance et hébergement du code de Device Flow Proxy Server pour Enedis* - [DomoticzFlowProxyServer](https://github.com/russandol-sarl/Device-Flow-Proxy-Server)
 
 Voir aussi la liste des [contributeurs](https://github.com/guillaumezin/DomoticzLinky/contributors) du projet d'origine.
@@ -309,6 +310,7 @@ Ce projet est sous licence AGPLv3 - cf. fichier [LICENSE](LICENSE) pour plus de 
 
 ## Remerciements
 * Guillaume Zin ([guillaumezin](https://github.com/guillaumezin)) - pour le plugin d'origine, publié sous licence AGPLv3, sur lequel ce fork repose
+* Bartras ([Bartras](https://github.com/Bartras)) - pour la prise en charge de la production (injection) via Conso API, en option, v3.1.0 ([PR #10](https://github.com/vzwingma/DomoticzLinky/pull/10))
 * Conso API ([conso.boris.sh](https://conso.boris.sh)) - pour le service gratuit qui donne accès aux données Enedis
 * Frédéric Caillet - son site Internet : [RUSSANDOL](https://www.russandol.pro) - pour l'hébergement et la maintenance de l'ancienne infrastructure intermédiaire d'obtention du consentement oAuth et la prise en charge contractuelle avec Enedis
 * Baptiste Candellier
